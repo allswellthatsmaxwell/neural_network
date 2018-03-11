@@ -72,7 +72,11 @@ class Layer:
         """
         self.W -= learning_rate * self.dW
         self.b -= learning_rate * self.db
-    
+
+    @staticmethod
+    def correct(vec, t, beta):
+        return vec / (1 - beta**t)
+        
     def __update_adam(self, learning_rate, t,
                beta1, beta2, eps = 1e-8):
         """ 
@@ -82,12 +86,18 @@ class Layer:
                and 0 <= beta1 <= 1
                and 0 <= beta2 <= 1
                and t > 0)
-        self.vdW = (beta1 * self.vdW + (1 - beta1) * self.dW) / (1 - beta1**t)
-        self.vdb = (beta1 * self.vdb + (1 - beta1) * self.db) / (1 - beta1**t)
-        self.sdW = (beta2 * self.sdW + (1 - beta2) * (self.dW**2)) / (1 - beta2**t)
-        self.sdb = (beta2 * self.sdb + (1 - beta2) * (self.db**2)) / (1 - beta2**t)
-        self.W -= learning_rate * (self.vdW / (np.sqrt(self.sdW) + eps))
-        self.b -= learning_rate * (self.vdb / (np.sqrt(self.sdb) + eps))
+        self.vdW = (beta1 * self.vdW + (1 - beta1) * self.dW)
+        self.vdb = (beta1 * self.vdb + (1 - beta1) * self.db)
+        self.sdW = (beta2 * self.sdW + (1 - beta2) * (self.dW**2))
+        self.sdb = (beta2 * self.sdb + (1 - beta2) * (self.db**2))
+        ## Apply correction to values used for dW and db update.
+        vdWc = self.correct(self.vdW, t, beta1)
+        sdWc = self.correct(self.sdW, t, beta2)
+        vdbc = self.correct(self.vdb, t, beta1)
+        sdbc = self.correct(self.sdb, t, beta2)
+
+        self.W -= learning_rate * (vdWc / (np.sqrt(sdWc) + eps))
+        self.b -= learning_rate * (vdbc / (np.sqrt(sdbc) + eps))
 
 class Net:
     """ A Net is made of layers
