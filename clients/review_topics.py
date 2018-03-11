@@ -1,11 +1,13 @@
 
+import sys
+sys.path.append('..')
 import csv, string, re, math
 import numpy as np
-import neural_network as nn
-import activations as avs
 from sklearn.metrics import roc_auc_score
 from prediction_utils import trn_val_tst
-import loss_functions as losses
+import neural_network.neural_network as nn
+import neural_network.activations as avs
+import neural_network.loss_functions as losses
 
 def get_words(text):
     """Removes all punctuation from text, and collapses all whitespace
@@ -15,11 +17,7 @@ def get_words(text):
 def read_texts_stars(csv_path, maxrows = math.inf):
     """return the 'text' and 'stars' entries (in two lists) from the 
     first maxrows records in csv_path"""
-    texts = []
-    stars = []
-    useful = []
-    funny = []
-    cool = []
+    texts, stars, useful, funny, cool = [], [], [], [], []
     nrow = 0
     with open(csv_path) as f:
         reader = csv.DictReader(f, delimiter = ',')

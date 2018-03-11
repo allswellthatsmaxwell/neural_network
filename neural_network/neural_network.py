@@ -6,10 +6,10 @@ Created on Wed Feb 28 23:42:03 2018
 @author: Maxwell Peterson
 """
 
-import activations as actv
-import initializations
+import neural_network.activations as actv
+import neural_network.initializations
 import numpy as np
-import loss_functions
+import neural_network.loss_functions
 
 
 class InputLayer:
@@ -21,7 +21,7 @@ class InputLayer:
 class Layer:
 
     def __init__(self, name, n, n_prev, activation, use_adam = False,
-                 initialization = initializations.he):
+                 initialization = neural_network.initializations.he):
         """ n: integer; the dimension of this layer
             n_prev: integer; the dimension of the previous layer            
             activation: function; the activation function for this node
@@ -44,6 +44,7 @@ class Layer:
         self.Z = None
     
     def shape(self): return self.W.shape
+
     def n_features(self): return self.shape[0]
     
     def propagate_forward_from(self, layer):
@@ -92,7 +93,7 @@ class Net:
     """ A Net is made of layers
     """
     def __init__(self, layer_dims, activations,
-                 loss = loss_functions.LogLoss(),
+                 loss = neural_network.loss_functions.LogLoss(),
                  use_adam = False):
         """
         layer_dims: an array of layer dimensions. 

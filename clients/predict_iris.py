@@ -6,13 +6,16 @@ Created on Fri Mar  2 16:58:57 2018
 @author: mson
 """
 
+import sys
+sys.path.append('..')
+
 import numpy as np
-import neural_network as nn
-from activations import relu, sigmoid 
+import neural_network.neural_network as nn
+import neural_network.loss_functions as losses
+from neural_network.activations import relu, sigmoid 
 from sklearn import datasets
 from sklearn.metrics import roc_auc_score
 from prediction_utils import trn_val_tst
-import loss_functions as losses
 
 iris = datasets.load_iris()
 X, y = iris.data, iris.target
@@ -24,7 +27,7 @@ iris_net = nn.Net(ilayer_dims, [relu, relu, sigmoid], loss = losses.LogLoss(),
                   use_adam = True)
 
 iris_net.train(X_trn.T, y_trn, iterations = 200, learning_rate = 0.05, 
-               beta1 = 0.7, beta2 = 0.9,               
+               beta1 = 0.7, beta2 = 0.9,        
                debug = True)
 yhat_trn = iris_net.predict(X_trn.T)
 yhat_val = iris_net.predict(X_val.T)
