@@ -17,6 +17,7 @@ class InputLayer:
     def __init__(self, A):
         self.A = A
         self.name = "input"
+        self.m_examples = A.shape[1]
 
 class Layer:
 
@@ -56,13 +57,18 @@ class Layer:
         self.Z = np.dot(self.W, layer.A) + self.b
         self.A = self.activation(self.Z)
         
-    def propagate_backward(self):
+    def propagate_backward(self, l2_scaling_factor):
         """
         Performs back propagation through this layer. 
+        l2_scaling_factor: the regularization parameter lambda 
+        divided by the number of training examples in the input layer.
+        Zero for no regularization.
         """
         m = self.A_prev.shape[1]
         dZ = actv.derivative(self.activation)(self.dA, self.Z)
-        self.dW = (1 / m) * np.dot(dZ, self.A_prev.T)
+        self.dW = (((1 / m) * np.dot(dZ, self.A_prev.T)) +
+                   ## add gradient of L2-regularized term
+                   l2_scaling_factor * self.W)
         self.db = (1 / m) * np.sum(dZ, axis = 1, keepdims = True)
         return np.dot(self.W.T, dZ) ## this is dA_prev
     
@@ -73,6 +79,9 @@ class Layer:
         self.W -= learning_rate * self.dW
         self.b -= learning_rate * self.db
 
+    def frobenius_norm(self):
+        return np.sum(np.square(self.W))
+        
     @staticmethod
     def correct(vec, t, beta):
         return vec / (1 - beta**t)
@@ -145,14 +154,14 @@ class Net:
         """
         return [l.W.shape for l in self.hidden_layers]
             
-    def __model_backward(self, y):
+    def __model_backward(self, y, l2_scaling_factor):
         """ Does one full backward pass through the network. """
         AL = self.hidden_layers[-1].A
         # derivative of cost with respect to final activation function
         dA_prev = self.J_prime(AL, y)
         for layer in reversed(self.hidden_layers):
             layer.dA = dA_prev
-            dA_prev = layer.propagate_backward()
+            dA_prev = layer.propagate_backward(l2_scaling_factor)
             
     def __update_parameters(self, learning_rate):
         """ Updates parameters on each layer at epoch t. """
@@ -163,8 +172,22 @@ class Net:
         """ Updates parameters on each layer at epoch t. """
         for layer in self.hidden_layers:
             layer.update_parameters(learning_rate, t, beta1, beta2)
+    
+    def l2_cost(self, lambd, m):
+        """ lambd: scaling parameter
+            m: number of training examples
+            returns: L2 cost
+                     (scaled sum of frobenius norms of all hidden layer matrices)
+        """
+        if lambd > 0.:
+            unscaled_l2_cost = np.sum([layer.frobenius_norm()
+                                       for layer in self.hidden_layers])
+        else:
+            unscaled_l2_cost = 0
+        return (lambd * unscaled_l2_cost) / (2 * m)
             
     def train(self, X, y, iterations = 100, learning_rate = 0.01,
+              lambd = 0.,
               converge_at = 0.02,
               beta1 = 0.9, beta2 = 0.99,
               debug = False):
@@ -177,6 +200,7 @@ class Net:
         Other arguments:
         iterations: number of times to pass through the training set.
         learning_rate: scaling factor for gradient descent step size
+        lambd: parameter scaling for L2 regularization
         converge_at: value of the cost function at which to stop training
         beta1, beta2: parameters that control how far back Adam-gradient-descent 
                uses on each iteration to compute the average of the gradient.
@@ -188,13 +212,15 @@ class Net:
         costs = []
         input_layer = InputLayer(X)
         AL = self.hidden_layers[-1].A
+        l2_scaling_factor = lambd / input_layer.m_examples
         for i in range(1, iterations + 1):
             self.__model_forward(input_layer)
             yhat = self.hidden_layers[-1].A
-            cost = self.J(yhat, y)
+            cost = self.J(yhat, y) + self.l2_cost(lambd, input_layer.m_examples)
             costs.append(cost)
-            if debug: print(cost)
-            self.__model_backward(y)
+            if debug:
+                print(cost)
+            self.__model_backward(y, l2_scaling_factor)
             if self.use_adam:
                 self.__adam(learning_rate, t = i, beta1 = beta1, beta2 = beta2)
             else:

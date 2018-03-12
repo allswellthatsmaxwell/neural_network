@@ -27,7 +27,7 @@ iris_net = nn.Net(ilayer_dims, [relu, relu, sigmoid], loss = losses.LogLoss(),
                   use_adam = True)
 
 iris_net.train(X_trn.T, y_trn, iterations = 200, learning_rate = 0.05, 
-               beta1 = 0.7, beta2 = 0.9,        
+               beta1 = 0.7, beta2 = 0.9, lambd = 0.9999999999,     
                debug = True)
 yhat_trn = iris_net.predict(X_trn.T)
 yhat_val = iris_net.predict(X_val.T)

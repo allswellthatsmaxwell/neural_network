@@ -5,6 +5,7 @@ Loss functions for neural networks.
 import numpy as np
 
 class LogLoss:
+    
     @staticmethod
     def cost(yhat, y):
         """ 
