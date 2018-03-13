@@ -185,9 +185,33 @@ class Net:
         else:
             unscaled_l2_cost = 0
         return (lambd * unscaled_l2_cost) / (2 * m)
+    
+    @staticmethod
+    def get_minibatches(X, y, minibatch_size):
+        """
+        X: n by m matrix of training examples
+        y: m length array of outcomes
+        minibatch_size: size of minibatches to split into
+        returns: a list of tuples [(X1_mini, y1_mini)], 
+        where length of yk_mini is minibatch_size.
+        """
+        m = X.shape[1]
+        permutation = list(np.random.permutation(m))
+        X_shuffled = X[:, permutation]
+        y_shuffled = y[permutation]##.reshape((1,m))
+        minibatches = []
+        for k in range(m // minibatch_size):
+            minibatches.append(
+                (X_shuffled[:, minibatch_size * k : minibatch_size * (k + 1)],
+                 y_shuffled[   minibatch_size * k : minibatch_size * (k + 1)]))
+        if m % minibatch_size != 0:
+            minibatches.append(
+                (X_shuffled[:, (m - m % minibatch_size):],
+                 y_shuffled[   (m - m % minibatch_size):]))
+        return minibatches
             
     def train(self, X, y, iterations = 100, learning_rate = 0.01,
-              lambd = 0.,
+              lambd = 0., minibatch_size = 64,
               converge_at = 0.02,
               beta1 = 0.9, beta2 = 0.99,
               debug = False):
@@ -212,22 +236,26 @@ class Net:
         costs = []
         input_layer = InputLayer(X)
         AL = self.hidden_layers[-1].A
-        l2_scaling_factor = lambd / input_layer.m_examples
         for i in range(1, iterations + 1):
-            self.__model_forward(input_layer)
-            yhat = self.hidden_layers[-1].A
-            cost = self.J(yhat, y) + self.l2_cost(lambd, input_layer.m_examples)
-            costs.append(cost)
-            if debug:
-                print(cost)
-            self.__model_backward(y, l2_scaling_factor)
-            if self.use_adam:
-                self.__adam(learning_rate, t = i, beta1 = beta1, beta2 = beta2)
-            else:
-                self.__update_parameters(learning_rate)
-            if cost < converge_at:
-                if debug: print("cost converged at iteration", i)
-                break
+            minibatches = self.get_minibatches(X, y, minibatch_size)
+            for minibatch in minibatches:                
+                (mini_X, mini_y) = minibatch
+                mini_input_layer = InputLayer(mini_X)
+                l2_scaling_factor = lambd / mini_input_layer.m_examples
+                self.__model_forward(mini_input_layer)
+                yhat = self.hidden_layers[-1].A
+                cost = self.J(yhat, mini_y) + self.l2_cost(lambd, mini_input_layer.m_examples)
+                costs.append(cost)
+                if debug:
+                    print(cost)
+                self.__model_backward(mini_y, l2_scaling_factor)
+                if self.use_adam:
+                    self.__adam(learning_rate, t = i, beta1 = beta1, beta2 = beta2)
+                else:
+                    self.__update_parameters(learning_rate)
+                if cost < converge_at:
+                    if debug: print("cost converged at iteration", i)
+                    break
         self.is_trained = True
         return costs
 

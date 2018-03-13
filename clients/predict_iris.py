@@ -16,6 +16,7 @@ from neural_network.activations import relu, sigmoid
 from sklearn import datasets
 from sklearn.metrics import roc_auc_score
 from prediction_utils import trn_val_tst
+import matplotlib.pyplot as plt
 
 iris = datasets.load_iris()
 X, y = iris.data, iris.target
@@ -26,9 +27,10 @@ ilayer_dims = [X.shape[1], 4, 1]
 iris_net = nn.Net(ilayer_dims, [relu, relu, sigmoid], loss = losses.LogLoss(),
                   use_adam = True)
 
-iris_net.train(X_trn.T, y_trn, iterations = 200, learning_rate = 0.05, 
-               beta1 = 0.7, beta2 = 0.9, lambd = 0.9999999999,     
-               debug = True)
+costs = iris_net.train(X_trn.T, y_trn, iterations = 200, learning_rate = 0.1,                
+                       beta1 = 0.9, beta2 = 0.99, lambd = 0, 
+                       minibatch_size = X_trn.shape[0],
+                       debug = True)
 yhat_trn = iris_net.predict(X_trn.T)
 yhat_val = iris_net.predict(X_val.T)
 yyhat_trn = np.vstack((y_trn, yhat_trn)).T

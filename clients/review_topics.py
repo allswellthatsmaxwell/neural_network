@@ -8,6 +8,7 @@ from prediction_utils import trn_val_tst
 import neural_network.neural_network as nn
 import neural_network.activations as avs
 import neural_network.loss_functions as losses
+import matplotlib.pyplot as plt
 
 def get_words(text):
     """Removes all punctuation from text, and collapses all whitespace
@@ -68,11 +69,11 @@ net_shape = [word_mat.shape[1], 20, 7, 5, 1]
 activations = [avs.relu, avs.relu, avs.relu, avs.relu, avs.sigmoid]
 
 net = nn.Net(net_shape, activations, use_adam = True)
-net.train(X = X_trn.T, y = y_trn, 
-          iterations = 2000, learning_rate = 0.001,
-          beta1 = 0.7, beta2 = 0.9,
-          lambd = 0.8,
-          debug = True)
+costs = net.train(X = X_trn.T, y = y_trn, 
+                  iterations = 200, learning_rate = 0.001,
+                  beta1 = 0.7, beta2 = 0.9,
+                  lambd = 0.6,
+                  debug = True)
 yhat_trn = net.predict(X_trn.T)
 yyhat_trn = np.vstack((y_trn, yhat_trn)).T
 auc_trn = roc_auc_score(y_trn, yhat_trn)
