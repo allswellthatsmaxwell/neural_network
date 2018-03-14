@@ -216,7 +216,9 @@ class Net:
         assert(np.min(yhat) != 0)
     
     def train(self, X, y, iterations = 100, learning_rate = 0.01,
-              lambd = 0., minibatch_size = 64,
+              lambd = 0.,
+              minibatch_size = 64,
+              alpha_decayer = lambda epoch: 1,
               converge_at = 0.02,
               beta1 = 0.9, beta2 = 0.99,
               debug = False):
@@ -229,11 +231,14 @@ class Net:
         Other arguments:
         iterations: number of times to pass through the training set.
         learning_rate: scaling factor for gradient descent step size
+        alpha_decayer: function of epoch (i.e. number of passes through 
+            the training set) that returns a scalar; that scalar is then
+            multiplied by the learning_rate to get the decayed learning_rate.
         lambd: parameter scaling for L2 regularization
         converge_at: value of the cost function at which to stop training
         beta1, beta2: parameters that control how far back Adam-gradient-descent 
-               uses on each iteration to compute the average of the gradient.
-               Ignored if use_adam is False.
+            uses on each iteration to compute the average of the gradient.
+            Ignored if use_adam is False.
         debug: Should various sorts of progress information be printed?
 
         returns: an array of what the cost function's value was at each iteration
