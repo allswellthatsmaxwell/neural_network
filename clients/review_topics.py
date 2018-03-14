@@ -71,7 +71,8 @@ activations = [avs.relu, avs.relu, avs.relu, avs.relu, avs.sigmoid]
 net = nn.Net(net_shape, activations, use_adam = True)
 costs = net.train(X = X_trn.T, y = y_trn, 
                   iterations = 200, learning_rate = 0.001,
-                  beta1 = 0.7, beta2 = 0.9,
+                  beta1 = 0.9, beta2 = 0.99,
+                  minibatch_size = 64,
                   lambd = 0.6,
                   debug = True)
 yhat_trn = net.predict(X_trn.T)
@@ -82,7 +83,7 @@ yhat_val = net.predict(X_val.T)
 yyhat_val = np.vstack((y_val, yhat_val)).T
 yyhat_val = yyhat_val[yyhat_val[:,1].argsort()[::-1]]
 auc_val = roc_auc_score(y_val, yhat_val)
-
+print("auc =", auc_val)
 #stars_vec = np.array([int(star) for star in stars])
 #activations = [avs.relu, avs.relu, avs.relu, avs.relu, avs.relu]
 #X_trn, y_trn, X_val, y_val, X_tst, y_tst = trn_val_tst(word_mat, stars_vec, 

@@ -209,7 +209,12 @@ class Net:
                 (X_shuffled[:, (m - m % minibatch_size):],
                  y_shuffled[   (m - m % minibatch_size):]))
         return minibatches
-            
+
+    @staticmethod
+    def check_for_edge_predictions(yhat):
+        assert(np.max(yhat) != 1)
+        assert(np.min(yhat) != 0)
+    
     def train(self, X, y, iterations = 100, learning_rate = 0.01,
               lambd = 0., minibatch_size = 64,
               converge_at = 0.02,
@@ -244,7 +249,9 @@ class Net:
                 l2_scaling_factor = lambd / mini_input_layer.m_examples
                 self.__model_forward(mini_input_layer)
                 yhat = self.hidden_layers[-1].A
-                cost = self.J(yhat, mini_y) + self.l2_cost(lambd, mini_input_layer.m_examples)
+                self.check_for_edge_predictions(yhat)
+                cost = (self.J(yhat, mini_y) +
+                        self.l2_cost(lambd, mini_input_layer.m_examples))
                 costs.append(cost)
                 if debug:
                     print(cost)
