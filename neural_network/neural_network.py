@@ -247,6 +247,7 @@ class Net:
         input_layer = InputLayer(X)
         AL = self.hidden_layers[-1].A
         for i in range(1, iterations + 1):
+            adj_learning_rate = alpha_decayer(i) * learning_rate
             minibatches = self.get_minibatches(X, y, minibatch_size)
             for minibatch in minibatches:                
                 (mini_X, mini_y) = minibatch
@@ -262,9 +263,9 @@ class Net:
                     print(cost)
                 self.__model_backward(mini_y, l2_scaling_factor)
                 if self.use_adam:
-                    self.__adam(learning_rate, t = i, beta1 = beta1, beta2 = beta2)
+                    self.__adam(adj_learning_rate, t = i, beta1 = beta1, beta2 = beta2)
                 else:
-                    self.__update_parameters(learning_rate)
+                    self.__update_parameters(adj_learning_rate)
                 if cost < converge_at:
                     if debug: print("cost converged at iteration", i)
                     break

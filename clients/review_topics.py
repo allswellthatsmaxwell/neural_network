@@ -70,9 +70,10 @@ activations = [avs.relu, avs.relu, avs.relu, avs.relu, avs.sigmoid]
 
 net = nn.Net(net_shape, activations, use_adam = True)
 costs = net.train(X = X_trn.T, y = y_trn, 
-                  iterations = 200, learning_rate = 0.001,
+                  iterations = 200, learning_rate = 0.1,
                   beta1 = 0.9, beta2 = 0.99,
                   minibatch_size = 64,
+                  alpha_decayer = lambda t: 1 / (1 + t),
                   lambd = 0.6,
                   debug = True)
 yhat_trn = net.predict(X_trn.T)
