@@ -11,7 +11,6 @@ import neural_network.initializations
 import numpy as np
 import neural_network.loss_functions
 
-
 class InputLayer:
     
     def __init__(self, A):
@@ -21,7 +20,9 @@ class InputLayer:
 
 class Layer:
 
-    def __init__(self, name, n, n_prev, activation, use_adam = False,
+    def __init__(self, name, n, n_prev, activation,
+                 use_adam = False,
+                 dropout_prob = 0,
                  initialization = neural_network.initializations.he):
         """ n: integer; the dimension of this layer
             n_prev: integer; the dimension of the previous layer            
@@ -30,9 +31,11 @@ class Layer:
             initialization: function; the initialization strategy to use
             use_adam: should Adam gradient descent be used to update W and b?
         """
+        assert(0 <= dropout_prob < 1)
         self.activation = activation
         self.W = initialization(n, n_prev)
         self.b = np.zeros((n, 1))
+        self.dropout_prob = dropout_prob
         self.update_parameters = self.__update_adam if use_adam else self.__update_gradient_descent
         ## exponentially-weighted averages for Adam gradient descent
         self.vdW = np.zeros(self.W.shape)
@@ -56,6 +59,11 @@ class Layer:
         self.A_prev = layer.A.copy()
         self.Z = np.dot(self.W, layer.A) + self.b
         self.A = self.activation(self.Z)
+        if self.dropout_prob > 0:
+            self.D = (np.random.randn(self.A.shape[0], self.A.shape[1]) <
+                      self.dropout_prob)
+            self.A *= self.D
+            self.A /= (1 - self.dropout_prob)
         
     def propagate_backward(self, l2_scaling_factor):
         """
@@ -65,6 +73,9 @@ class Layer:
         Zero for no regularization.
         """
         m = self.A_prev.shape[1]
+        if self.dropout_prob > 0:
+            self.dA *= self.D
+            self.dA /= (1 - self.dropout_prob)
         dZ = actv.derivative(self.activation)(self.dA, self.Z)
         self.dW = (((1 / m) * np.dot(dZ, self.A_prev.T)) +
                    ## add gradient of L2-regularized term
@@ -111,8 +122,11 @@ class Layer:
 class Net:
     """ A Net is made of layers
     """
-    def __init__(self, layer_dims, activations,
+    def __init__(self,
+                 layer_dims,
+                 activations,
                  loss = neural_network.loss_functions.LogLoss(),
+                 dropout_prob = 0,
                  use_adam = False):
         """
         layer_dims: an array of layer dimensions. 
@@ -132,17 +146,18 @@ class Net:
         
         self.hidden_layers = []
         for i in range(1, len(layer_dims)):
+            is_output_layer = i == len(layer_dims) - 1
             self.hidden_layers.append(
                 Layer(name = i,
                       n = layer_dims[i], n_prev = layer_dims[i - 1],
                       activation = activations[i],
+                      dropout_prob = 0 if is_output_layer else dropout_prob,
                       use_adam = use_adam))
 
     def __model_forward(self, input_layer):
         """ 
         Does one full forward pass through the network.        
         """
-        
         self.hidden_layers[0].propagate_forward_from(input_layer)
         for i in range(1, self.n_layers()):
             self.hidden_layers[i].propagate_forward_from(self.hidden_layers[i - 1])
@@ -156,9 +171,9 @@ class Net:
             
     def __model_backward(self, y, l2_scaling_factor):
         """ Does one full backward pass through the network. """
-        AL = self.hidden_layers[-1].A
+        output_layer = self.hidden_layers[-1]
         # derivative of cost with respect to final activation function
-        dA_prev = self.J_prime(AL, y)
+        dA_prev = self.J_prime(output_layer.A, y)
         for layer in reversed(self.hidden_layers):
             layer.dA = dA_prev
             dA_prev = layer.propagate_backward(l2_scaling_factor)
@@ -209,11 +224,21 @@ class Net:
                 (X_shuffled[:, (m - m % minibatch_size):],
                  y_shuffled[   (m - m % minibatch_size):]))
         return minibatches
+
+    @staticmethod
+    def nudge_from_edges(yhat, eps = 1e-8):
+        yhat[yhat == 1] -= eps
+        yhat[yhat == 0] += eps
+        return yhat
             
-    def train(self, X, y, iterations = 100, learning_rate = 0.01,
-              lambd = 0., minibatch_size = 64,
+    def train(self, X, y,
+              iterations = 100,
+              learning_rate = 0.01,
+              lambd = 0.,
+              minibatch_size = 64,
               converge_at = 0.02,
-              beta1 = 0.9, beta2 = 0.99,
+              beta1 = 0.9,
+              beta2 = 0.99,
               debug = False):
         """ 
         Train the network.
@@ -238,16 +263,17 @@ class Net:
         AL = self.hidden_layers[-1].A
         for i in range(1, iterations + 1):
             minibatches = self.get_minibatches(X, y, minibatch_size)
-            for minibatch in minibatches:                
+            for minibatch in minibatches:
                 (mini_X, mini_y) = minibatch
                 mini_input_layer = InputLayer(mini_X)
                 l2_scaling_factor = lambd / mini_input_layer.m_examples
                 self.__model_forward(mini_input_layer)
-                yhat = self.hidden_layers[-1].A
-                cost = self.J(yhat, mini_y) + self.l2_cost(lambd, mini_input_layer.m_examples)
+                cost = (self.J(self.hidden_layers[-1].A,
+                               mini_y) +
+                        self.l2_cost(lambd, mini_input_layer.m_examples))
                 costs.append(cost)
                 if debug:
-                    print(cost)
+                    print("cost =", cost)
                 self.__model_backward(mini_y, l2_scaling_factor)
                 if self.use_adam:
                     self.__adam(learning_rate, t = i, beta1 = beta1, beta2 = beta2)
@@ -267,8 +293,15 @@ class Net:
         returns: an m-length array of predictions
         """
         assert(self.is_trained)
+        dropout_probs = []
+        ## no dropout when predicting
+        for layer in self.hidden_layers:
+            dropout_probs.append(layer.dropout_prob)
+            layer.dropout_prob = 0
         self.__model_forward(InputLayer(X))
         yhat = self.hidden_layers[-1].A
+        for layer, p in zip(self.hidden_layers, dropout_probs):
+            layer.dropout_prob = p
         return np.squeeze(yhat)
     
     def n_layers(self): 

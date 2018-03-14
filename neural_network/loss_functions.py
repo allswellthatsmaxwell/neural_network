@@ -3,6 +3,7 @@ Loss functions for neural networks.
 """
 
 import numpy as np
+from warnings import warn
 
 class LogLoss:
     
@@ -24,6 +25,12 @@ class LogLoss:
         returns the gradient w.r.t. yhat of predicting the column matrix yhat
         when true labels are the array y. 
         """
+        eps = 1e-8
+        assert(np.max(yhat) != 1)
+        assert(np.min(yhat) != 1)
+        yhat[yhat == 1] -= eps
+        yhat[yhat == 0] += eps        
+        ## print("max =", np.max(yhat), "min =", np.min(yhat))
         return -(np.divide(y, yhat) - np.divide(1 - y, 1 - yhat))
 
 class MSE:

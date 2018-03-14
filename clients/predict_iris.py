@@ -25,9 +25,10 @@ X_trn, y_trn, X_val, y_val, X_tst, y_tst = trn_val_tst(X, y_binary,
                                                        4/10, 3/10, 3/10)
 ilayer_dims = [X.shape[1], 4, 1]
 iris_net = nn.Net(ilayer_dims, [relu, relu, sigmoid], loss = losses.LogLoss(),
-                  use_adam = True)
+                  use_adam = True,
+                  dropout_prob = 0.5)
 
-costs = iris_net.train(X_trn.T, y_trn, iterations = 200, learning_rate = 0.1,                
+costs = iris_net.train(X_trn.T, y_trn, iterations = 1, learning_rate = 0.1,                
                        beta1 = 0.9, beta2 = 0.99, lambd = 0, 
                        minibatch_size = X_trn.shape[0],
                        debug = True)

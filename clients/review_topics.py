@@ -68,11 +68,14 @@ X_trn, y_trn, X_val, y_val, X_tst, y_tst = trn_val_tst(word_mat, high_score,
 net_shape = [word_mat.shape[1], 20, 7, 5, 1]
 activations = [avs.relu, avs.relu, avs.relu, avs.relu, avs.sigmoid]
 
-net = nn.Net(net_shape, activations, use_adam = True)
+net = nn.Net(net_shape, activations, 
+             dropout_prob = 0,
+             use_adam = True)
 costs = net.train(X = X_trn.T, y = y_trn, 
-                  iterations = 200, learning_rate = 0.001,
+                  iterations = 100, learning_rate = 0.003,
                   beta1 = 0.7, beta2 = 0.9,
-                  lambd = 0.6,
+                  minibatch_size = X_trn.shape[0],
+                  lambd = 0.4,
                   debug = True)
 yhat_trn = net.predict(X_trn.T)
 yyhat_trn = np.vstack((y_trn, yhat_trn)).T
