@@ -32,6 +32,12 @@ def read_texts_stars(csv_path, maxrows = math.inf):
             cool.append(int(row['cool']))
     return texts, stars, useful, funny, cool
 
+
+def bind_and_sort(y, yhat):
+    """ Put input vectors into a matrix and sort by yhat descending"""
+    yyhat = np.vstack((y, yhat)).T
+    return yyhat[yyhat[:,1].argsort()[::-1]]
+
 ## Stores a mapping of words to index positions
 class WordVec:
     words_ix = dict()
@@ -81,13 +87,29 @@ yyhat_trn = np.vstack((y_trn, yhat_trn)).T
 auc_trn = roc_auc_score(y_trn, yhat_trn)
 
 yhat_val = net.predict(X_val.T)
-yyhat_val = np.vstack((y_val, yhat_val)).T
-yyhat_val = yyhat_val[yyhat_val[:,1].argsort()[::-1]]
+yyhat_val = bind_and_sort(y_val, yhat_val)
 auc_val = roc_auc_score(y_val, yhat_val)
 print("auc =", auc_val)
-#stars_vec = np.array([int(star) for star in stars])
-#activations = [avs.relu, avs.relu, avs.relu, avs.relu, avs.relu]
-#X_trn, y_trn, X_val, y_val, X_tst, y_tst = trn_val_tst(word_mat, stars_vec, 
-#                                                       4/10, 3/10, 3/10)
-#stars_net = nn.Net(net_shape, activations = activations, loss = losses.MSE)
-#stars_net.train(X = X_trn.T, y = y_trn, iterations = 500, debug = True)
+
+
+
+
+
+net_shape = [word_mat.shape[1], 10, 7, 5, 1]
+stars_vec = np.array([int(star) for star in stars])
+activations = [avs.relu, avs.relu, avs.relu, avs.relu, avs.relu]
+X_trn, y_trn, X_val, y_val, X_tst, y_tst = trn_val_tst(word_mat, stars_vec, 
+                                                       4/10, 3/10, 3/10)
+stars_net = nn.Net(net_shape, activations = activations, loss = losses.MSE)
+stars_net.train(X = X_trn.T, y = y_trn, iterations = 500, debug = True)
+yhat_trn = stars_net.predict(X_trn.T)
+yhat_val = stars_net.predict(X_val.T)
+
+yyhat_trn = bind_and_sort(y_trn, yhat_trn)
+yyhat_val = bind_and_sort(y_val, yhat_val)
+
+plt.scatter(y_trn, yhat_trn)
+plt.scatter(y_val, yhat_val)
+
+
+

@@ -39,6 +39,5 @@ class MSE:
 
     @staticmethod
     def cost_gradient(yhat, y):
-        ## this is incorrect: it returns a scalar, whereas we need a gradient vector
         m = len(y)        
-        return (2 / m) * np.sum((yhat - y) * y)
+        return (2 / m) * (yhat - y)

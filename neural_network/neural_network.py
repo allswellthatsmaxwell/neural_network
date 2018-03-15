@@ -10,7 +10,7 @@ import neural_network.activations as actv
 import neural_network.initializations
 import numpy as np
 import neural_network.loss_functions
-
+import warnings
 
 class InputLayer:
     
@@ -33,7 +33,10 @@ class Layer:
         self.activation = activation
         self.W = initialization(n, n_prev)
         self.b = np.zeros((n, 1))
-        self.update_parameters = self.__update_adam if use_adam else self.__update_gradient_descent
+        if use_adam:
+            self.update_parameters = self.__update_adam
+        else:
+            self.update_parameters = self.__update_gradient_descent
         ## exponentially-weighted averages for Adam gradient descent
         self.vdW = np.zeros(self.W.shape)
         self.vdb = np.zeros(self.b.shape)
@@ -128,7 +131,7 @@ class Net:
         self.use_adam = use_adam
         self.is_trained = False
         self.J = loss.cost
-        self.J_prime = loss.cost_gradient
+        self.J_prime = loss.cost_gradient        
         
         self.hidden_layers = []
         for i in range(1, len(layer_dims)):
@@ -137,7 +140,9 @@ class Net:
                       n = layer_dims[i], n_prev = layer_dims[i - 1],
                       activation = activations[i],
                       use_adam = use_adam))
-
+            
+    def __output_activation(self): return self.hidden_layers[-1].activation
+            
     def __model_forward(self, input_layer):
         """ 
         Does one full forward pass through the network.        
@@ -212,8 +217,10 @@ class Net:
 
     @staticmethod
     def check_for_edge_predictions(yhat):
-        assert(np.max(yhat) != 1)
-        assert(np.min(yhat) != 0)
+        if np.max(yhat) == 1:
+            warnings.warn("some predictions are 1")
+        if np.min(yhat) == 0:
+            warnings.warn("some predictions are 0")
     
     def train(self, X, y, iterations = 100, learning_rate = 0.01,
               lambd = 0.,
