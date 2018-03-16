@@ -55,7 +55,7 @@ PUNCT_REMOVES = str.maketrans('', '', string.punctuation)
 WS_COLLAPSE_RE = re.compile("\W+")
 
 texts, stars, useful, funny, cool = \
-    read_texts_stars(f'{DATA_DIR}/yelp_review.csv', 500)
+    read_texts_stars(f'{DATA_DIR}/yelp_review.csv', 5000)
 word_lists = [get_words(text).split() for text in texts]
 unique_words = list(set().union(*word_lists))
 
@@ -95,13 +95,21 @@ print("auc =", auc_val)
 
 
 
-net_shape = [word_mat.shape[1], 10, 7, 5, 1]
+net_shape = [word_mat.shape[1], 30, 20, 20, 20, 20, 20, 1]
 stars_vec = np.array([int(star) for star in stars])
-activations = [avs.relu, avs.relu, avs.relu, avs.relu, avs.relu]
+activations = [avs.relu for i in net_shape]
 X_trn, y_trn, X_val, y_val, X_tst, y_tst = trn_val_tst(word_mat, stars_vec, 
                                                        4/10, 3/10, 3/10)
-stars_net = nn.Net(net_shape, activations = activations, loss = losses.MSE)
-stars_net.train(X = X_trn.T, y = y_trn, iterations = 500, debug = True)
+stars_net = nn.Net(net_shape, 
+                   activations = activations, 
+                   loss = losses.MSE,
+                   use_adam = True)
+stars_net.train(X = X_trn.T, y = y_trn, 
+                iterations = 50, 
+                debug = True,
+                lambd = 0.1,
+                minibatch_size = 256,
+                learning_rate = 0.005)
 yhat_trn = stars_net.predict(X_trn.T)
 yhat_val = stars_net.predict(X_val.T)
 

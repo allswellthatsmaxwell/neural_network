@@ -222,7 +222,9 @@ class Net:
         if np.min(yhat) == 0:
             warnings.warn("some predictions are 0")
     
-    def train(self, X, y, iterations = 100, learning_rate = 0.01,
+    def train(self, X, y,
+              iterations = 100,
+              learning_rate = 0.01,
               lambd = 0.,
               minibatch_size = 64,
               alpha_decayer = lambda epoch: 1,
