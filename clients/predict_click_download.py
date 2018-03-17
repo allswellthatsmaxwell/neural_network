@@ -9,7 +9,8 @@ Created on Fri Mar 16 19:11:59 2018
 import os
 import numpy as np
 import pandas as pd
-import time, datetime
+import time
+from datetime import datetime, date
 from sklearn.metrics import roc_auc_score
 from prediction_utils import trn_val_tst, standard_binary_classification_layers
 import neural_network.neural_network as nn
@@ -22,17 +23,27 @@ def sort_and_get_prior_clicks(dat):
     return dat
 
 def string_to_timestamp(s):
-    return time.mktime(datetime.datetime.strptime(s, "%Y-%m-%d %H:%M:%S").
-                       timetuple())
+    return datetime.strptime(s, "%Y-%m-%d %H:%M:%S")
+
+def timestamp_to_float(ts):
+    return time.mktime(ts.timetuple())
+    
+def seconds_since_midnight(timestamp):
+    midnight = datetime.strptime("00:00:00", "%H:%M:%S").time()
+    base_day = datetime(1,1,1,0,0,0)
+    return (datetime.combine(base_day, timestamp.time()) - 
+            datetime.combine(base_day, midnight)).seconds
 
 def prepare_data(dataset):
     dat = sort_and_get_prior_clicks(dataset)
     dat['click_timestamp'] = dat['click_time'].apply(string_to_timestamp)
-    dat['time_since_last_click'] = dat.groupby('ip').click_timestamp.diff()
+    dat['click_timefloat'] = dat['click_timestamp'].apply(timestamp_to_float)    
+    dat['time_since_last_click'] = dat.groupby('ip').click_timefloat.diff()
+    dat['time_of_day'] = dat['click_timestamp'].apply(seconds_since_midnight)
     unique_counts = dat.groupby('ip').agg({'os'    : 'nunique', 
                                            'device': 'nunique', 
                                            'app'   : 'nunique'})
-    dat = dat.join(unique_counts, on = 'ip', rsuffix = '_n_distinct')
+    dat = dat.join(unique_counts, on = 'ip', rsuffix = '_n_distinct')   
     return dat
 
 DATA_DIR = "../../data/china"
