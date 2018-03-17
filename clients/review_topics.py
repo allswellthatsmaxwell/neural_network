@@ -50,7 +50,7 @@ class WordVec:
     def set_word_universe(cls, word_list):
         cls.words_ix = dict(zip(word_list, range(len(word_list))))
 
-DATA_DIR = "../../data"
+DATA_DIR = "../../yelp_analyses/data"
 PUNCT_REMOVES = str.maketrans('', '', string.punctuation)
 WS_COLLAPSE_RE = re.compile("\W+")
 
