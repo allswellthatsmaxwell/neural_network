@@ -16,6 +16,12 @@ def sigmoid(Z):
 def relu(Z):
     return np.maximum(0, Z)        
 
+def softmax(Z):
+    """Compute the softmax of vector Z in a numerically stable way."""
+    shiftZ = Z - np.max(Z)
+    exps = np.exp(shiftZ)
+    return exps / np.sum(exps)
+
 def relu_prime(dA, Z):
     """
     Perform backward propagation for a single RELU unit.    

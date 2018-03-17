@@ -4,8 +4,7 @@ Loss functions for neural networks.
 
 import numpy as np
 
-class LogLoss:
-    
+class LogLoss:    
     @staticmethod
     def cost(yhat, y):
         """ 
@@ -41,3 +40,19 @@ class MSE:
     def cost_gradient(yhat, y):
         m = len(y)        
         return (2 / m) * (yhat - y)
+
+class SoftMax:
+
+    @staticmethod
+    def cost(yhat, y):
+        """ 
+        yhat: matrix with predictions
+        y: array of true values
+        """
+        m = len(y)
+        cost = - (1 / m) * np.sum(y * np.log(yhat))
+        return np.squeeze(cost)
+    
+    @staticmethod
+    def cost_gradient(yhat, y):
+        
