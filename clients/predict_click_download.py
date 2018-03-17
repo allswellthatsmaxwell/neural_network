@@ -25,11 +25,15 @@ def string_to_timestamp(s):
     return time.mktime(datetime.datetime.strptime(s, "%Y-%m-%d %H:%M:%S").
                        timetuple())
 
-def prepare_data(dat):
-    dat = sort_and_get_prior_clicks(dat)
+def prepare_data(dataset):
+    dat = sort_and_get_prior_clicks(dataset)
     dat['click_timestamp'] = dat['click_time'].apply(string_to_timestamp)
     dat['time_since_last_click'] = dat.groupby('ip').click_timestamp.diff()
-    return dat    
+    unique_counts = dat.groupby('ip').agg({'os'    : 'nunique', 
+                                           'device': 'nunique', 
+                                           'app'   : 'nunique'})
+    dat = dat.join(unique_counts, on = 'ip', rsuffix = '_n_distinct')
+    return dat
 
 DATA_DIR = "../../data/china"
 trn_path = os.path.join(DATA_DIR, "train.csv")
