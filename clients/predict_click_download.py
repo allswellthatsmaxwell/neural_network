@@ -19,6 +19,13 @@ DATA_DIR = "../../data/china"
 trn_path = os.path.join(DATA_DIR, "train.csv")
 tst_path = os.path.join(DATA_DIR, "test.csv")
 
-trn = pd.read_csv(trn_path, nrows = 1000000)
+dat = pd.read_csv(trn_path, nrows = 10000)
+## tst = pd.read_csv(tst_path, nrows = 1000000)
 
-attributed_rate = trn['is_attributed'].sum() / trn.shape[0]
+attributed_rate = dat['is_attributed'].sum() / dat.shape[0]
+
+X = dat.drop('is_attributed', axis = 1)
+y = dat['is_attributed']
+
+X_trn, y_trn, X_val, y_val, X_tst, y_tst = trn_val_tst(X, y, 
+                                                       8/10, 1/10, 1/10)   
