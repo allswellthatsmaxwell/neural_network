@@ -4,7 +4,7 @@ sys.path.append('..')
 import csv, string, re, math
 import numpy as np
 from sklearn.metrics import roc_auc_score
-from prediction_utils import trn_val_tst
+from prediction_utils import trn_val_tst, standard_binary_classification_layers
 import neural_network.neural_network as nn
 import neural_network.activations as avs
 import neural_network.loss_functions as losses
@@ -55,7 +55,7 @@ PUNCT_REMOVES = str.maketrans('', '', string.punctuation)
 WS_COLLAPSE_RE = re.compile("\W+")
 
 texts, stars, useful, funny, cool = \
-    read_texts_stars(f'{DATA_DIR}/yelp_review.csv', 5000)
+    read_texts_stars(f'{DATA_DIR}/yelp_review.csv', 500)
 word_lists = [get_words(text).split() for text in texts]
 unique_words = list(set().union(*word_lists))
 
@@ -72,7 +72,7 @@ X_trn, y_trn, X_val, y_val, X_tst, y_tst = trn_val_tst(word_mat, high_score,
                                                        8/10, 1/10, 1/10)
 
 net_shape = [word_mat.shape[1], 20, 7, 5, 1]
-activations = [avs.relu, avs.relu, avs.relu, avs.relu, avs.sigmoid]
+activations = standard_binary_classification_layers(len(net_shape))
 
 net = nn.Net(net_shape, activations, use_adam = True)
 costs = net.train(X = X_trn.T, y = y_trn, 
