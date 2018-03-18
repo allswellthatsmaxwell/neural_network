@@ -35,15 +35,20 @@ def seconds_since_midnight(timestamp):
             datetime.combine(base_day, midnight)).seconds
 
 def prepare_data(dataset):
-    dat = sort_and_get_prior_clicks(dataset)
+    dat = dataset.copy()
+    dat = sort_and_get_prior_clicks(dat)
     dat['click_timestamp'] = dat['click_time'].apply(string_to_timestamp)
     dat['click_timefloat'] = dat['click_timestamp'].apply(timestamp_to_float)    
     dat['time_since_last_click'] = dat.groupby('ip').click_timefloat.diff()
     dat['time_of_day'] = dat['click_timestamp'].apply(seconds_since_midnight)
     unique_counts = dat.groupby('ip').agg({'os'    : 'nunique', 
                                            'device': 'nunique', 
-                                           'app'   : 'nunique'})
-    dat = dat.join(unique_counts, on = 'ip', rsuffix = '_n_distinct')   
+                                           'app'   : 'nunique',
+                                           'channel': 'nunique'})
+    group_counts = dat.groupby('ip')['ip'].count()    
+    count_dat = (unique_counts.join(group_counts).
+                 rename(columns = {'ip': 'total_clicks'}))
+    dat = dat.join(count_dat, on = 'ip', rsuffix = '_n_distinct')
     return dat
 
 DATA_DIR = "../../data/china"
@@ -57,8 +62,14 @@ dat = prepare_data(dataset)
 
 attributed_rate = dat['is_attributed'].sum() / dat.shape[0]
 
-X = dat.drop('is_attributed', axis = 1)
-y = dat['is_attributed']
+CATEGORICAL_PREDICTORS = ['os', 'device', 'app', 'channel']
+CONTINUOUS_PREDICTORS= ['os_n_distinct', 'device_n_distinct', 
+                        'app_n_distinct', 'channel_n_distinct',
+                        'time_of_day', 'clicks_so_far']
+PREDICTORS = CATEGORICAL_PREDICTORS + CONTINUOUS_PREDICTORS
+X = pd.get_dummies(dat[PREDICTORS], 
+                   columns = CATEGORICAL_PREDICTORS).as_matrix()
+y = np.array(dat['is_attributed'])
 
 X_trn, y_trn, X_val, y_val, X_tst, y_tst = trn_val_tst(X, y, 
                                                        8/10, 1/10, 1/10)
@@ -67,4 +78,6 @@ net_shape = [X.shape[1], 30, 20, 20, 20, 20, 20, 1]
 activations = standard_binary_classification_layers(len(net_shape))
 
 net = nn.Net(net_shape, activations, use_adam = True)
-
+net.train(X = X_trn.T, y = y_trn, iterations = 1, learning_rate = 0.01,
+          minibatch_size = X_trn.shape[0],
+          debug = True)

@@ -55,4 +55,4 @@ class SoftMax:
     
     @staticmethod
     def cost_gradient(yhat, y):
-        
+        pass
