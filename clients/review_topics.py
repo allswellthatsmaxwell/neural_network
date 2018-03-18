@@ -4,7 +4,9 @@ sys.path.append('..')
 import csv, string, re, math
 import numpy as np
 from sklearn.metrics import roc_auc_score
-from prediction_utils import trn_val_tst, standard_binary_classification_layers
+from prediction_utils import (trn_val_tst, 
+                              standard_binary_classification_layers,
+                              bind_and_sort)
 import neural_network.neural_network as nn
 import neural_network.activations as avs
 import neural_network.loss_functions as losses
@@ -33,10 +35,6 @@ def read_texts_stars(csv_path, maxrows = math.inf):
     return texts, stars, useful, funny, cool
 
 
-def bind_and_sort(y, yhat):
-    """ Put input vectors into a matrix and sort by yhat descending"""
-    yyhat = np.vstack((y, yhat)).T
-    return yyhat[yyhat[:,1].argsort()[::-1]]
 
 ## Stores a mapping of words to index positions
 class WordVec:

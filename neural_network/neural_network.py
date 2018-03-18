@@ -221,7 +221,11 @@ class Net:
             warnings.warn("some predictions are 1")
         if np.min(yhat) == 0:
             warnings.warn("some predictions are 0")
-    
+
+    @staticmethod
+    def __assert_input_ok(X):
+        assert(not np.isnan(X).any())
+            
     def train(self, X, y,
               iterations = 100,
               learning_rate = 0.01,
@@ -253,6 +257,7 @@ class Net:
         returns: an array of what the cost function's value was at each iteration
         """
         costs = []
+        self.__assert_input_ok(X)
         input_layer = InputLayer(X)
         AL = self.hidden_layers[-1].A
         for i in range(1, iterations + 1):
