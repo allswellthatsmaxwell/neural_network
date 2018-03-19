@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 import time
 from datetime import datetime, date
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import roc_auc_score
 from prediction_utils import (trn_val_tst, 
                               standard_binary_classification_layers,
@@ -39,7 +40,7 @@ def seconds_since_midnight(timestamp):
     return the number of seconds between midnight and the time in timestamp 
     """
     midnight = datetime.strptime("00:00:00", "%H:%M:%S").time()
-    base_day = datetime(1,1,1,0,0,0)
+    base_day = datetime(1,1,1,0,0,0) ## just some default day
     return (datetime.combine(base_day, timestamp.time()) - 
             datetime.combine(base_day, midnight)).seconds
 
@@ -73,7 +74,7 @@ trn_path = os.path.join(DATA_DIR, "train.csv")
 tst_path = os.path.join(DATA_DIR, "test.csv")
 
 dataset = pd.read_csv(trn_path, nrows = 10000)
-submission_dat = pd.read_csv(tst_path)
+#submission_dat = pd.read_csv(tst_path)
 
 attributed_rate = dataset['is_attributed'].sum() / dataset.shape[0]
 
@@ -93,6 +94,12 @@ X = stn.standardize(X)
  X_val, y_val, 
  X_tst, y_tst) = trn_val_tst(X, y, 8/10, 1/10, 1/10)
 
+clf = RandomForestClassifier(n_estimators = 1000, verbose = 1)
+clf.fit(X_trn, y_trn)
+yhat_val = clf.predict_proba(X_val)[:, 0]
+yyhat_val = bind_and_sort(y_val, yhat_val)
+auc_val = roc_auc_score(y_val, yhat_val)
+
 net_shape = [X.shape[1], 30, 20, 20, 20, 20, 20, 1]
 activations = standard_binary_classification_layers(len(net_shape))
 
@@ -103,7 +110,7 @@ costs = net.train(X = X_trn.T, y = y_trn,
                   minibatch_size = 128,
                   lambd = 0.25,
                   debug = True)
-yhat_val =net.predict(X_val.T)
+yhat_val = 1 - net.predict(X_val.T)
 yyhat_val = bind_and_sort(y_val, yhat_val)
 auc_val = roc_auc_score(y_val, yhat_val)
 print("auc =", auc_val)
