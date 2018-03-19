@@ -7,6 +7,7 @@ Created on Fri Mar 16 19:11:59 2018
 """
 
 import os
+os.chdir('/home/mson/home/neural_network/clients')
 import numpy as np
 import pandas as pd
 import time
@@ -21,9 +22,11 @@ import neural_network.activations as avs
 import neural_network.loss_functions as losses
 
 def sort_and_get_prior_clicks(dat):
+    """ for each ip address in dat, for each click that ip address has,
+    count the number of clicks that occurred prior to the one in the record
+    (and add one to include the current record)"""
     dat.sort_values(['ip', 'click_time'], inplace = True)
     dat['clicks_so_far'] = dat.groupby('ip').cumcount() + 1
-    return dat
 
 def string_to_timestamp(s):
     return datetime.strptime(s, "%Y-%m-%d %H:%M:%S")
@@ -32,16 +35,19 @@ def timestamp_to_float(ts):
     return time.mktime(ts.timetuple())
     
 def seconds_since_midnight(timestamp):
+    """ 
+    return the number of seconds between midnight and the time in timestamp 
+    """
     midnight = datetime.strptime("00:00:00", "%H:%M:%S").time()
     base_day = datetime(1,1,1,0,0,0)
     return (datetime.combine(base_day, timestamp.time()) - 
             datetime.combine(base_day, midnight)).seconds
 
 def engineer_features(dataset):
-    dat = dataset.copy()
-    dat = sort_and_get_prior_clicks(dat)
+    dat = dataset
+    sort_and_get_prior_clicks(dat)
     dat['click_timestamp'] = dat['click_time'].apply(string_to_timestamp)
-    dat['click_timefloat'] = dat['click_timestamp'].apply(timestamp_to_float)    
+    dat['click_timefloat'] = dat['click_timestamp'].apply(timestamp_to_float)
     dat['time_since_last_click'] = dat.groupby('ip').click_timefloat.diff()
     dat['time_of_day'] = dat['click_timestamp'].apply(seconds_since_midnight)
     unique_counts = dat.groupby('ip').agg({'os'    : 'nunique', 
@@ -93,9 +99,9 @@ activations = standard_binary_classification_layers(len(net_shape))
 net = nn.Net(net_shape, activations, use_adam = True)
 costs = net.train(X = X_trn.T, y = y_trn, 
                   iterations = 100, 
-                  learning_rate = 0.0001,
+                  learning_rate = 0.001,
                   minibatch_size = 128,
-                  lambd = 0.3,
+                  lambd = 0.25,
                   debug = True)
 yhat_val =net.predict(X_val.T)
 yyhat_val = bind_and_sort(y_val, yhat_val)
