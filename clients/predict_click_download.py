@@ -11,6 +11,7 @@ os.chdir('/home/mson/home/neural_network/clients')
 import numpy as np
 import pandas as pd
 import time
+import csv
 from datetime import datetime, date
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import roc_auc_score
@@ -68,13 +69,66 @@ def prepare_predictors(dataset, continuous, categorical):
     if categorical != []:
         dat = pd.get_dummies(dat, columns = categorical)
     return dat.as_matrix()
+
+def prepare_submission_file_for_streaming(orig_submit_path):
+    sorted_path = os.path.join(DATA_DIR, "submission_sorted.csv")
+    if not os.path.exists(sorted_path):
+        submission_dat = pd.read_csv(orig_submit_path)
+        submission_dat.sort_values(by = 'ip', inplace = True)
+        submission_dat.to_csv(sorted_path, index = False)
+    return sorted_path
+
+#def stream_predict(sorted_submit_path, net, ips_at_a_time = 100):
+#    assert(net.is_trained)
+#    ranges = []
+#    with open(sorted_submit_path) as f:
+#        reader = csv.DictReader(f, delimiter = ',')
+#        for row in reader:     
+        
+def get_X_submission(submit_path):
+    pkl_path = os.path.join(DATA_DIR, "X_submit.pkl")
+    if not os.path.exists(pkl_path):
+        submission_dat = pd.read_csv(submit_path)    
+        X_submit = prepare_predictors(submission_dat, 
+                                      CONTINUOUS_PREDICTORS, 
+                                      CATEGORICAL_PREDICTORS)
+        del(submission_dat)
+        X_submit.dump(pkl_path)
+        return X_submit
+    else:
+        return np.load(pkl_path)
     
+def chunk_predict(X_t, net, chunk_size = 10000, verbose = True):
+    """ 
+    Use net to predict the outcome of each training example (column) in X_t,
+    sending chunk_size records through the net at a time to fit in memory
+    X_t: a matrix where each column is a training example
+    net: a trained instance of the neural_network class
+    returns: a list with predictions corresponding to the columns of X_t 
+    """
+    assert(net.is_trained)
+    yhat_submit = []
+    m = X_t.shape[1]
+    for i in range(0, m // chunk_size):
+        small_mat = X_t[:, (chunk_size * i):(chunk_size * (i + 1))]
+        yhat_chunk = net.predict(small_mat)
+        yhat_submit.extend(yhat_chunk)
+        if verbose: print(int(i * chunk_size / m * 100), 
+                          "% of records processed")
+    left_over = m % chunk_size
+    small_mat = X_t[:, (m - left_over):]
+    yhat_chunk = net.predict(small_mat)
+    yhat_submit.extend(yhat_chunk)
+    if verbose: print("100 % of records processed")
+    assert(len(yhat_submit) == m)
+    return yhat_submit
+
 DATA_DIR = "../../data/china"
 trn_path = os.path.join(DATA_DIR, "train.csv")
 tst_path = os.path.join(DATA_DIR, "test.csv")
 
 dataset = pd.read_csv(trn_path, nrows = 10000)
-#submission_dat = pd.read_csv(tst_path)
+##sorted_submission_path = prepare_submission_file_for_streaming(tst_path)
 
 attributed_rate = dataset['is_attributed'].sum() / dataset.shape[0]
 
@@ -94,12 +148,6 @@ X = stn.standardize(X)
  X_val, y_val, 
  X_tst, y_tst) = trn_val_tst(X, y, 8/10, 1/10, 1/10)
 
-clf = RandomForestClassifier(n_estimators = 1000, verbose = 1)
-clf.fit(X_trn, y_trn)
-yhat_val = clf.predict_proba(X_val)[:, 0]
-yyhat_val = bind_and_sort(y_val, yhat_val)
-auc_val = roc_auc_score(y_val, yhat_val)
-
 net_shape = [X.shape[1], 30, 20, 20, 20, 20, 20, 1]
 activations = standard_binary_classification_layers(len(net_shape))
 
@@ -115,9 +163,9 @@ yyhat_val = bind_and_sort(y_val, yhat_val)
 auc_val = roc_auc_score(y_val, yhat_val)
 print("auc =", auc_val)
 
-X_submit = prepare_predictors(submission_dat, 
-                              CONTINUOUS_PREDICTORS, 
-                              CATEGORICAL_PREDICTORS)
-y_submit = np.array(submission_dat['is_attributed'])    
+X_submit_transpose = stn.standardize(get_X_submission(tst_path)).T
+yhat_submit = chunk_predict(X_submit_transpose, net, chunk_size = 1000000,
+                            verbose = True)
 
-yhat_submit = net.predict(X_submit.T)
+
+    
