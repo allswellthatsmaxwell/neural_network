@@ -65,10 +65,11 @@ def engineer_features(dataset):
 def prepare_predictors(dataset, continuous, categorical):
     predictors = continuous + categorical
     dat = engineer_features(dataset)
+    click_id = dat['click_id']
     dat = dat[predictors]
     if categorical != []:
         dat = pd.get_dummies(dat, columns = categorical)
-    return dat.as_matrix()
+    return dat.as_matrix(), click_id
 
 def prepare_submission_file_for_streaming(orig_submit_path):
     sorted_path = os.path.join(DATA_DIR, "submission_sorted.csv")
@@ -86,17 +87,19 @@ def prepare_submission_file_for_streaming(orig_submit_path):
 #        for row in reader:     
         
 def get_X_submission(submit_path):
-    pkl_path = os.path.join(DATA_DIR, "X_submit.pkl")
-    if not os.path.exists(pkl_path):
+    X_pkl_path = os.path.join(DATA_DIR, "X_submit.pkl")
+    id_pkl_path = os.path.join(DATA_DIR, "click_id_submit.pkl")
+    if not (os.path.exists(X_pkl_path) and os.path.exists(id_pkl_path)):
         submission_dat = pd.read_csv(submit_path)    
-        X_submit = prepare_predictors(submission_dat, 
-                                      CONTINUOUS_PREDICTORS, 
-                                      CATEGORICAL_PREDICTORS)
+        X_submit, click_id = prepare_predictors(submission_dat, 
+                                                CONTINUOUS_PREDICTORS, 
+                                                CATEGORICAL_PREDICTORS)
         del(submission_dat)
-        X_submit.dump(pkl_path)
-        return X_submit
+        X_submit.dump(X_pkl_path)
+        click_id.dump(id_pkl_path)
+        return X_submit, click_id
     else:
-        return np.load(pkl_path)
+        return np.load(X_pkl_path), np.load(id_pkl_path)
     
 def chunk_predict(X_t, net, chunk_size = 10000, verbose = True):
     """ 
@@ -128,6 +131,7 @@ trn_path = os.path.join(DATA_DIR, "train.csv")
 tst_path = os.path.join(DATA_DIR, "test.csv")
 
 dataset = pd.read_csv(trn_path, nrows = 10000)
+dataset['click_id'] = range(dataset.shape[0])
 ##sorted_submission_path = prepare_submission_file_for_streaming(tst_path)
 
 attributed_rate = dataset['is_attributed'].sum() / dataset.shape[0]
@@ -138,7 +142,7 @@ CONTINUOUS_PREDICTORS= ['os_n_distinct', 'device_n_distinct',
                         'time_of_day', 'clicks_so_far']
 PREDICTORS = CATEGORICAL_PREDICTORS + CONTINUOUS_PREDICTORS
 
-X = prepare_predictors(dataset, CONTINUOUS_PREDICTORS, CATEGORICAL_PREDICTORS)
+X, _ = prepare_predictors(dataset, CONTINUOUS_PREDICTORS, CATEGORICAL_PREDICTORS)
 y = np.array(dataset['is_attributed'])    
 
 stn = Standardizer(X)
@@ -163,7 +167,8 @@ yyhat_val = bind_and_sort(y_val, yhat_val)
 auc_val = roc_auc_score(y_val, yhat_val)
 print("auc =", auc_val)
 
-X_submit_transpose = stn.standardize(get_X_submission(tst_path)).T
+X_submit, click_id_submit = get_X_submission(tst_path)
+X_submit_transpose = stn.standardize(X_submit).T
 yhat_submit = chunk_predict(X_submit_transpose, net, chunk_size = 1000000,
                             verbose = True)
 
