@@ -90,6 +90,13 @@ def get_X_submission(submit_path,
                      data_dir,
                      continuous_predictors, 
                      categorical_predictors):
+    """ 
+    Read submit_path contents into dataframe, prepare using prepare_predictors,
+    and pickle out the resulting predictor matrix (as a numpy matrix) 
+    and the corresponding click_id (as a pandas Series). If the pickled
+    files already exist, they are read; otherwise, they are created. In either
+    case, the predictor matrix and click_id Series are returned.
+    """
     X_pkl_path = os.path.join(data_dir, "X_submit.pkl")
     id_pkl_path = os.path.join(data_dir, "click_id_submit.pkl")
     if not (os.path.exists(X_pkl_path) and os.path.exists(id_pkl_path)):
@@ -129,7 +136,7 @@ def chunk_predict(X_t, net, chunk_size = 10000, verbose = True):
     assert(len(yhat_submit) == m)
     return yhat_submit
 
-CATEGORICAL_PREDICTORS = []#['os', 'device', 'app', 'channel']
+CATEGORICAL_PREDICTORS = ['os', 'device', 'app', 'channel']
 CONTINUOUS_PREDICTORS= ['os_n_distinct', 'device_n_distinct', 
                         'app_n_distinct', 'channel_n_distinct',
                         'time_of_day', 'clicks_so_far']
@@ -138,13 +145,11 @@ DATA_DIR = "../../data/china"
 trn_path = os.path.join(DATA_DIR, "train.csv")
 tst_path = os.path.join(DATA_DIR, "test.csv")
 
-dataset = pd.read_csv(trn_path, nrows = 10000)
+dataset = pd.read_csv(trn_path, nrows = 100000)
 dataset['click_id'] = range(dataset.shape[0])
 ##sorted_submission_path = prepare_submission_file_for_streaming(tst_path)
 
 attributed_rate = dataset['is_attributed'].sum() / dataset.shape[0]
-
-
 
 X, _ = prepare_predictors(dataset, CONTINUOUS_PREDICTORS, CATEGORICAL_PREDICTORS)
 y = np.array(dataset['is_attributed'])    
@@ -153,8 +158,8 @@ stn = Standardizer(X)
 X = stn.standardize(X)
 
 (X_trn, y_trn, 
- X_val, y_val, 
- X_tst, y_tst) = trn_val_tst(X, y, 8/10, 1/10, 1/10)
+ X_tst, y_tst, 
+ X_val, y_val) = trn_val_tst(X, y, 9/10, 1/10, 0)
 
 net_shape = [X.shape[1], 30, 20, 20, 20, 20, 20, 1]
 activations = standard_binary_classification_layers(len(net_shape))
@@ -164,9 +169,12 @@ costs = net.train(X = X_trn.T, y = y_trn,
                   iterations = 400, 
                   learning_rate = 0.001,
                   minibatch_size = 128,
-                  lambd = 0.25,
+                  lambd = 0.6,
                   debug = True)
-yhat_val = 1 - net.predict(X_val.T)
+yhat_trn = net.predict(X_trn.T)
+auc_trn = roc_auc_score(y_trn, yhat_trn)
+print("training set auc =", auc_trn)
+yhat_val = net.predict(X_val.T)
 yyhat_val = bind_and_sort(y_val, yhat_val)
 auc_val = roc_auc_score(y_val, yhat_val)
 print("auc =", auc_val)
