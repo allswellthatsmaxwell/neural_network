@@ -71,13 +71,13 @@ def prepare_predictors(dataset, continuous, categorical):
         dat = pd.get_dummies(dat, columns = categorical)
     return dat.as_matrix(), click_id
 
-def prepare_submission_file_for_streaming(orig_submit_path):
-    sorted_path = os.path.join(DATA_DIR, "submission_sorted.csv")
-    if not os.path.exists(sorted_path):
-        submission_dat = pd.read_csv(orig_submit_path)
-        submission_dat.sort_values(by = 'ip', inplace = True)
-        submission_dat.to_csv(sorted_path, index = False)
-    return sorted_path
+#def prepare_submission_file_for_streaming(orig_submit_path):
+#    sorted_path = os.path.join(DATA_DIR, "submission_sorted.csv")
+#    if not os.path.exists(sorted_path):
+#        submission_dat = pd.read_csv(orig_submit_path)
+#        submission_dat.sort_values(by = 'ip', inplace = True)
+#        submission_dat.to_csv(sorted_path, index = False)
+#    return sorted_path
 
 #def stream_predict(sorted_submit_path, net, ips_at_a_time = 100):
 #    assert(net.is_trained)
@@ -86,17 +86,20 @@ def prepare_submission_file_for_streaming(orig_submit_path):
 #        reader = csv.DictReader(f, delimiter = ',')
 #        for row in reader:     
         
-def get_X_submission(submit_path):
-    X_pkl_path = os.path.join(DATA_DIR, "X_submit.pkl")
-    id_pkl_path = os.path.join(DATA_DIR, "click_id_submit.pkl")
+def get_X_submission(submit_path,
+                     data_dir,
+                     continuous_predictors, 
+                     categorical_predictors):
+    X_pkl_path = os.path.join(data_dir, "X_submit.pkl")
+    id_pkl_path = os.path.join(data_dir, "click_id_submit.pkl")
     if not (os.path.exists(X_pkl_path) and os.path.exists(id_pkl_path)):
         submission_dat = pd.read_csv(submit_path)    
         X_submit, click_id = prepare_predictors(submission_dat, 
-                                                CONTINUOUS_PREDICTORS, 
-                                                CATEGORICAL_PREDICTORS)
+                                                continuous_predictors, 
+                                                categorical_predictors)
         del(submission_dat)
         X_submit.dump(X_pkl_path)
-        click_id.dump(id_pkl_path)
+        click_id.to_pickle(id_pkl_path)
         return X_submit, click_id
     else:
         return np.load(X_pkl_path), np.load(id_pkl_path)
@@ -126,6 +129,11 @@ def chunk_predict(X_t, net, chunk_size = 10000, verbose = True):
     assert(len(yhat_submit) == m)
     return yhat_submit
 
+CATEGORICAL_PREDICTORS = []#['os', 'device', 'app', 'channel']
+CONTINUOUS_PREDICTORS= ['os_n_distinct', 'device_n_distinct', 
+                        'app_n_distinct', 'channel_n_distinct',
+                        'time_of_day', 'clicks_so_far']
+PREDICTORS = CATEGORICAL_PREDICTORS + CONTINUOUS_PREDICTORS
 DATA_DIR = "../../data/china"
 trn_path = os.path.join(DATA_DIR, "train.csv")
 tst_path = os.path.join(DATA_DIR, "test.csv")
@@ -136,11 +144,7 @@ dataset['click_id'] = range(dataset.shape[0])
 
 attributed_rate = dataset['is_attributed'].sum() / dataset.shape[0]
 
-CATEGORICAL_PREDICTORS = []#['os', 'device', 'app', 'channel']
-CONTINUOUS_PREDICTORS= ['os_n_distinct', 'device_n_distinct', 
-                        'app_n_distinct', 'channel_n_distinct',
-                        'time_of_day', 'clicks_so_far']
-PREDICTORS = CATEGORICAL_PREDICTORS + CONTINUOUS_PREDICTORS
+
 
 X, _ = prepare_predictors(dataset, CONTINUOUS_PREDICTORS, CATEGORICAL_PREDICTORS)
 y = np.array(dataset['is_attributed'])    
@@ -157,7 +161,7 @@ activations = standard_binary_classification_layers(len(net_shape))
 
 net = nn.Net(net_shape, activations, use_adam = True)
 costs = net.train(X = X_trn.T, y = y_trn, 
-                  iterations = 100, 
+                  iterations = 400, 
                   learning_rate = 0.001,
                   minibatch_size = 128,
                   lambd = 0.25,
@@ -167,10 +171,15 @@ yyhat_val = bind_and_sort(y_val, yhat_val)
 auc_val = roc_auc_score(y_val, yhat_val)
 print("auc =", auc_val)
 
-X_submit, click_id_submit = get_X_submission(tst_path)
+X_submit, click_id_submit = get_X_submission(tst_path, 
+                                             DATA_DIR, 
+                                             CONTINUOUS_PREDICTORS, 
+                                             CATEGORICAL_PREDICTORS)
 X_submit_transpose = stn.standardize(X_submit).T
 yhat_submit = chunk_predict(X_submit_transpose, net, chunk_size = 1000000,
                             verbose = True)
-
+submission_output = pd.DataFrame({'click_id': list(click_id_submit),
+                                  'is_attributed': yhat_submit})
+submission_output.to_csv(os.path.join(DATA_DIR, 'submission_output.csv'), index = False)
 
     
