@@ -65,6 +65,7 @@ def engineer_features(dataset):
 def prepare_predictors(dataset, continuous, categorical):
     predictors = continuous + categorical
     dat = engineer_features(dataset)
+    print(dat.columns)
     click_id = dat['click_id']
     dat = dat[predictors]
     if categorical != []:
@@ -109,7 +110,6 @@ def stream_predict(sorted_submit_path, net,
     assert(net.is_trained)
     predictions = []
     click_ids = []
-    i = 1
     with open(sorted_submit_path) as f:
         reader = csv.DictReader(f, delimiter = ',')
         header = reader.fieldnames
@@ -117,8 +117,9 @@ def stream_predict(sorted_submit_path, net,
         rows_this_batch = []
         while True:
             rows_this_batch.append(row)
+            #print(rows_this_batch[-1])
             try:                                
-                if i % lines_at_a_time == 0:
+                if len(rows_this_batch) % lines_at_a_time == 0:
                     ## If wrapping up the collection of a batch,
                     ## collect the rest of the ip addresses so that no ip
                     ## is split across batches.
@@ -138,7 +139,6 @@ def stream_predict(sorted_submit_path, net,
                     row = next(reader)
             except StopIteration:
                 break
-            i += 1
         predictions_batch, click_id_batch = do_batch_prediction(
                 rows_this_batch, header, net, standardizer,
                 continuous, categorical, train_columns)
@@ -157,16 +157,20 @@ def do_batch_prediction(rows, header, net, standardizer,
     """
     assert(net.is_trained)
     df = pd.DataFrame(rows, columns = header)
-    dat, click_id_batch = prepare_predictors(df, continuous,
-                                             categorical)
+    dat, click_id_batch = prepare_predictors(df, continuous, categorical)
     new_levels = [colname for colname in dat.columns 
-                  if colname not in train_columns]    
+                  if colname not in train_columns]
     dat.drop(labels = new_levels, axis = 1, inplace = True)
+    print(dat.shape)
     ## Add all-zero columns for dummy levels that were in training, but were 
     ## not in current batch
     for colname in train_columns:
         if colname not in dat.columns:
+            print("adding zero column for", colname)
             dat[colname] = 0
+    print(dat.shape)
+    global data
+    data = dat
     ##print(list(dat.columns))
     X = dat.as_matrix()
     print(X.shape)
@@ -236,7 +240,8 @@ OUTPUT_DIR = "../../out/china"
 trn_path = os.path.join(DATA_DIR, "train.csv")
 tst_path = os.path.join(DATA_DIR, "test.csv")
 
-dataset = pd.read_csv(trn_path, nrows = 100000)
+NROW_TRAIN = 100000
+dataset = pd.read_csv(trn_path, nrows = NROW_TRAIN)
 dataset['click_id'] = range(dataset.shape[0])
 ##sorted_submission_path = prepare_submission_file_for_streaming(tst_path)
 
@@ -287,6 +292,17 @@ submission_output.to_csv(os.path.join(DATA_DIR, 'submission_output.csv'),
 
 sorted_path = prepare_submission_file_for_streaming(tst_path, OUTPUT_DIR, 
                                                     nrows = 10000)
+predictions, ids = stream_predict(sorted_path, net, 
+                                  CONTINUOUS_PREDICTORS, 
+                                  CATEGORICAL_PREDICTORS,
+                                  train_columns,
+                                  stn)
+
+######
+## stream predict on training - should be the same as predicting on X_trn above
+######
+sorted_path = prepare_submission_file_for_streaming(trn_path, OUTPUT_DIR, 
+                                                    nrows = NROW_TRAIN)
 predictions, ids = stream_predict(sorted_path, net, 
                                   CONTINUOUS_PREDICTORS, 
                                   CATEGORICAL_PREDICTORS,
