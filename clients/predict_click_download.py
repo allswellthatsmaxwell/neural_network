@@ -69,7 +69,7 @@ def prepare_predictors(dataset, continuous, categorical):
     dat = dat[predictors]
     if categorical != []:
         dat = pd.get_dummies(dat, columns = categorical)
-    return dat.as_matrix(), click_id
+    return dat, click_id
 
 def prepare_submission_file_for_streaming(orig_submit_path, output_dir, 
                                           nrows = None):
@@ -89,7 +89,8 @@ def prepare_submission_file_for_streaming(orig_submit_path, output_dir,
         submission_dat.to_csv(sorted_path, index = False)
     return sorted_path
 
-def stream_predict(sorted_submit_path, net, continuous, categorical,
+def stream_predict(sorted_submit_path, net, 
+                   continuous, categorical, train_columns,
                    standardizer,
                    lines_at_a_time = 10000):
     """
@@ -108,7 +109,7 @@ def stream_predict(sorted_submit_path, net, continuous, categorical,
     assert(net.is_trained)
     predictions = []
     click_ids = []
-    i = 0
+    i = 1
     with open(sorted_submit_path) as f:
         reader = csv.DictReader(f, delimiter = ',')
         header = reader.fieldnames
@@ -128,7 +129,8 @@ def stream_predict(sorted_submit_path, net, continuous, categorical,
                         row = next(reader)
                     predictions_batch, click_id_batch = do_batch_prediction(
                             rows_this_batch, header, net, standardizer,                                                           
-                            continuous, categorical)
+                            continuous, categorical, train_columns)
+                    print(predictions_batch)
                     predictions.extend(predictions_batch)
                     click_ids.extend(click_id_batch)
                     rows_this_batch = []
@@ -139,12 +141,13 @@ def stream_predict(sorted_submit_path, net, continuous, categorical,
             i += 1
         predictions_batch, click_id_batch = do_batch_prediction(
                 rows_this_batch, header, net, standardizer,
-                continuous, categorical)
+                continuous, categorical, train_columns)
         predictions.extend(predictions_batch)
         click_ids.extend(click_id_batch)
     return predictions, click_ids
 
-def do_batch_prediction(rows, header, net, standardizer, continuous, categorical):
+def do_batch_prediction(rows, header, net, standardizer, 
+                        continuous, categorical, train_columns):
     """
     combines rows into a dataframe with column names header, 
     prepares predictors specified in continuous and categorical, 
@@ -154,8 +157,19 @@ def do_batch_prediction(rows, header, net, standardizer, continuous, categorical
     """
     assert(net.is_trained)
     df = pd.DataFrame(rows, columns = header)
-    X, click_id_batch = prepare_predictors(df, continuous, 
-                                           categorical)
+    dat, click_id_batch = prepare_predictors(df, continuous,
+                                             categorical)
+    new_levels = [colname for colname in dat.columns 
+                  if colname not in train_columns]    
+    dat.drop(labels = new_levels, axis = 1, inplace = True)
+    ## Add all-zero columns for dummy levels that were in training, but were 
+    ## not in current batch
+    for colname in train_columns:
+        if colname not in dat.columns:
+            dat[colname] = 0
+    ##print(list(dat.columns))
+    X = dat.as_matrix()
+    print(X.shape)
     X = standardizer.standardize(X)
     predictions_batch = net.predict(X.T)
     return predictions_batch, click_id_batch
@@ -175,10 +189,12 @@ def get_X_submission(submit_path,
     id_pkl_path = os.path.join(data_dir, "click_id_submit.pkl")
     if not (os.path.exists(X_pkl_path) and os.path.exists(id_pkl_path)):
         submission_dat = pd.read_csv(submit_path)    
-        X_submit, click_id = prepare_predictors(submission_dat,
-                                                continuous_predictors,
-                                                categorical_predictors)
+        dat_submit, click_id = prepare_predictors(submission_dat,
+                                                  continuous_predictors,
+                                                  categorical_predictors)
         del(submission_dat)
+        X_submit = dat_submit.as_matrix()
+        del(dat_submit)
         X_submit.dump(X_pkl_path)
         click_id.to_pickle(id_pkl_path)
         return X_submit, click_id
@@ -226,7 +242,10 @@ dataset['click_id'] = range(dataset.shape[0])
 
 attributed_rate = dataset['is_attributed'].sum() / dataset.shape[0]
 
-X, _ = prepare_predictors(dataset, CONTINUOUS_PREDICTORS, CATEGORICAL_PREDICTORS)
+dat, _ = prepare_predictors(dataset, 
+                            CONTINUOUS_PREDICTORS, CATEGORICAL_PREDICTORS)
+train_columns = dat.columns
+X = dat.as_matrix()
 y = np.array(dataset['is_attributed'])    
 
 stn = Standardizer(X)
@@ -267,9 +286,10 @@ submission_output.to_csv(os.path.join(DATA_DIR, 'submission_output.csv'),
                          index = False)
 
 sorted_path = prepare_submission_file_for_streaming(tst_path, OUTPUT_DIR, 
-                                                    nrows = 1000)
+                                                    nrows = 10000)
 predictions, ids = stream_predict(sorted_path, net, 
                                   CONTINUOUS_PREDICTORS, 
                                   CATEGORICAL_PREDICTORS,
+                                  train_columns,
                                   stn)
     
