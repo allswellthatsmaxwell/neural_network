@@ -71,10 +71,20 @@ def prepare_predictors(dataset, continuous, categorical):
         dat = pd.get_dummies(dat, columns = categorical)
     return dat.as_matrix(), click_id
 
-def prepare_submission_file_for_streaming(orig_submit_path):
-    sorted_path = os.path.join(DATA_DIR, "submission_sorted.csv")
+def prepare_submission_file_for_streaming(orig_submit_path, output_dir, 
+                                          nrows = None):
+    """ 
+    Reads the first nrows from the csv at orig_submit_path,
+    sorts it by ip, and writes it back into data directory; returns
+    the path written to.
+    """
+    if nrows is not None:
+        sorted_fname = f"submission_sorted_{nrows}.csv"
+    else:
+        sorted_fname = "submission_sorted.csv"
+    sorted_path = os.path.join(output_dir, sorted_fname)
     if not os.path.exists(sorted_path):
-        submission_dat = pd.read_csv(orig_submit_path)
+        submission_dat = pd.read_csv(orig_submit_path, nrows = nrows)
         submission_dat.sort_values(by = 'ip', inplace = True)
         submission_dat.to_csv(sorted_path, index = False)
     return sorted_path
@@ -98,32 +108,58 @@ def stream_predict(sorted_submit_path, net, continuous, categorical,
     assert(net.is_trained)
     predictions = []
     click_ids = []
-    rows_this_batch = []
     i = 0
     with open(sorted_submit_path) as f:
         reader = csv.DictReader(f, delimiter = ',')
         header = reader.fieldnames
+        row = next(reader)
+        rows_this_batch = []
         while True:
-            try:
-                row = next(reader)
-                rows_this_batch.append(row)
+            rows_this_batch.append(row)
+            try:                                
                 if i % lines_at_a_time == 0:
-                    ## eat up the rest of the lines for the current ip address 
-                    ## then make rows_this_batch into dataframe, prepare it
-                    ## and standardize it, and predict it.
-                    ##
-                    ## MISSING: EAT UP REST STEP
-                    df = pd.DataFrame(rows_this_batch, columns = header)
-                    X, click_id_batch = prepare_predictors(df, continuous, 
-                                                           categorical)
-                    X = standardizer.standardize(X)
-                    predictions_batch = net.predict(X.T)
+                    ## If wrapping up the collection of a batch,
+                    ## collect the rest of the ip addresses so that no ip
+                    ## is split across batches.
+                    current_ip = row['ip']
+                    row = next(reader)
+                    while row['ip'] == current_ip:
+                        rows_this_batch.append(row)
+                        row = next(reader)
+                    predictions_batch, click_id_batch = do_batch_prediction(
+                            rows_this_batch, header, net, standardizer,                                                           
+                            continuous, categorical)
                     predictions.extend(predictions_batch)
                     click_ids.extend(click_id_batch)
-            except:
-        i += 1
+                    rows_this_batch = []
+                else:
+                    row = next(reader)
+            except StopIteration:
+                break
+            i += 1
+        predictions_batch, click_id_batch = do_batch_prediction(
+                rows_this_batch, header, net, standardizer,
+                continuous, categorical)
+        predictions.extend(predictions_batch)
+        click_ids.extend(click_id_batch)
     return predictions, click_ids
-        
+
+def do_batch_prediction(rows, header, net, standardizer, continuous, categorical):
+    """
+    combines rows into a dataframe with column names header, 
+    prepares predictors specified in continuous and categorical, 
+    standardizes with standardizer, and predicts using net on the resulting 
+    matrix.
+    returns: a vector of predictions and corresponding click ids
+    """
+    assert(net.is_trained)
+    df = pd.DataFrame(rows, columns = header)
+    X, click_id_batch = prepare_predictors(df, continuous, 
+                                           categorical)
+    X = standardizer.standardize(X)
+    predictions_batch = net.predict(X.T)
+    return predictions_batch, click_id_batch
+
 def get_X_submission(submit_path,
                      data_dir,
                      continuous_predictors, 
@@ -139,8 +175,8 @@ def get_X_submission(submit_path,
     id_pkl_path = os.path.join(data_dir, "click_id_submit.pkl")
     if not (os.path.exists(X_pkl_path) and os.path.exists(id_pkl_path)):
         submission_dat = pd.read_csv(submit_path)    
-        X_submit, click_id = prepare_predictors(submission_dat, 
-                                                continuous_predictors, 
+        X_submit, click_id = prepare_predictors(submission_dat,
+                                                continuous_predictors,
                                                 categorical_predictors)
         del(submission_dat)
         X_submit.dump(X_pkl_path)
@@ -180,6 +216,7 @@ CONTINUOUS_PREDICTORS= ['os_n_distinct', 'device_n_distinct',
                         'time_of_day', 'clicks_so_far']
 PREDICTORS = CATEGORICAL_PREDICTORS + CONTINUOUS_PREDICTORS
 DATA_DIR = "../../data/china"
+OUTPUT_DIR = "../../out/china"
 trn_path = os.path.join(DATA_DIR, "train.csv")
 tst_path = os.path.join(DATA_DIR, "test.csv")
 
@@ -226,6 +263,13 @@ yhat_submit = chunk_predict(X_submit_transpose, net, chunk_size = 1000000,
                             verbose = True)
 submission_output = pd.DataFrame({'click_id': list(click_id_submit),
                                   'is_attributed': yhat_submit})
-submission_output.to_csv(os.path.join(DATA_DIR, 'submission_output.csv'), index = False)
+submission_output.to_csv(os.path.join(DATA_DIR, 'submission_output.csv'), 
+                         index = False)
 
+sorted_path = prepare_submission_file_for_streaming(tst_path, OUTPUT_DIR, 
+                                                    nrows = 1000)
+predictions, ids = stream_predict(sorted_path, net, 
+                                  CONTINUOUS_PREDICTORS, 
+                                  CATEGORICAL_PREDICTORS,
+                                  stn)
     
