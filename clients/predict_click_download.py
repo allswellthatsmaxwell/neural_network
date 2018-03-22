@@ -92,7 +92,8 @@ def prepare_submission_file_for_streaming(orig_submit_path, output_dir,
 def stream_predict(sorted_submit_path, net, 
                    continuous, categorical, train_columns,
                    standardizer,
-                   lines_at_a_time = 10000):
+                   lines_at_a_time = 10000,
+                   verbose = True):
     """
     Reads, prepares as training data was prepared, and predicts upon 
     lines_at_a_time lines at a time (as a dataframe) from the csv file 
@@ -109,6 +110,7 @@ def stream_predict(sorted_submit_path, net,
     assert(net.is_trained)
     predictions = []
     click_ids = []
+    i = 0
     with open(sorted_submit_path) as f:
         reader = csv.DictReader(f, delimiter = ',')
         header = reader.fieldnames
@@ -131,6 +133,8 @@ def stream_predict(sorted_submit_path, net,
                             continuous, categorical, train_columns)
                     predictions.extend(predictions_batch)
                     click_ids.extend(click_id_batch)
+                    i += len(rows_this_batch)
+                    if verbose: print(i, "rows processed")
                     rows_this_batch = []
                 else:
                     row = next(reader)
@@ -140,7 +144,7 @@ def stream_predict(sorted_submit_path, net,
                 rows_this_batch, header, net, standardizer,
                 continuous, categorical, train_columns)
         predictions.extend(predictions_batch)
-        click_ids.extend(click_id_batch)
+        click_ids.extend(click_id_batch)        
     return predictions, click_ids
 
 def do_batch_prediction(rows, header, net, standardizer, 
@@ -268,23 +272,18 @@ yyhat_val = bind_and_sort(y_val, yhat_val)
 auc_val = roc_auc_score(y_val, yhat_val)
 print("auc =", auc_val)
 
-X_submit, click_id_submit = get_X_submission(tst_path, 
-                                             DATA_DIR, 
-                                             CONTINUOUS_PREDICTORS, 
-                                             CATEGORICAL_PREDICTORS)
-X_submit_transpose = stn.standardize(X_submit).T
-yhat_submit = chunk_predict(X_submit_transpose, net, chunk_size = 1000000,
-                            verbose = True)
-submission_output = pd.DataFrame({'click_id': list(click_id_submit),
-                                  'is_attributed': yhat_submit})
-submission_output.to_csv(os.path.join(DATA_DIR, 'submission_output.csv'), 
-                         index = False)
 
 sorted_path = prepare_submission_file_for_streaming(tst_path, OUTPUT_DIR, 
-                                                    nrows = 10000)
+                                                    nrows = None)
 predictions, ids = stream_predict(sorted_path, net, 
                                   CONTINUOUS_PREDICTORS, 
                                   CATEGORICAL_PREDICTORS,
                                   train_columns,
-                                  stn)
+                                  stn,
+                                  lines_at_a_time = 100000)
+
+submission_output = pd.DataFrame({'click_id': list(ids),
+                                  'is_attributed': predictions})
+submission_output.to_csv(os.path.join(OUTPUT_DIR, 'submission_output.csv'), 
+                         index = False)
 
