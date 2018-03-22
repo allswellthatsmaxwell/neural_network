@@ -65,7 +65,6 @@ def engineer_features(dataset):
 def prepare_predictors(dataset, continuous, categorical):
     predictors = continuous + categorical
     dat = engineer_features(dataset)
-    print(dat.columns)
     click_id = dat['click_id']
     dat = dat[predictors]
     if categorical != []:
@@ -117,7 +116,6 @@ def stream_predict(sorted_submit_path, net,
         rows_this_batch = []
         while True:
             rows_this_batch.append(row)
-            #print(rows_this_batch[-1])
             try:                                
                 if len(rows_this_batch) % lines_at_a_time == 0:
                     ## If wrapping up the collection of a batch,
@@ -131,7 +129,6 @@ def stream_predict(sorted_submit_path, net,
                     predictions_batch, click_id_batch = do_batch_prediction(
                             rows_this_batch, header, net, standardizer,                                                           
                             continuous, categorical, train_columns)
-                    print(predictions_batch)
                     predictions.extend(predictions_batch)
                     click_ids.extend(click_id_batch)
                     rows_this_batch = []
@@ -161,19 +158,12 @@ def do_batch_prediction(rows, header, net, standardizer,
     new_levels = [colname for colname in dat.columns 
                   if colname not in train_columns]
     dat.drop(labels = new_levels, axis = 1, inplace = True)
-    print(dat.shape)
     ## Add all-zero columns for dummy levels that were in training, but were 
     ## not in current batch
     for colname in train_columns:
         if colname not in dat.columns:
-            print("adding zero column for", colname)
             dat[colname] = 0
-    print(dat.shape)
-    global data
-    data = dat
-    ##print(list(dat.columns))
     X = dat.as_matrix()
-    print(X.shape)
     X = standardizer.standardize(X)
     predictions_batch = net.predict(X.T)
     return predictions_batch, click_id_batch
@@ -298,14 +288,3 @@ predictions, ids = stream_predict(sorted_path, net,
                                   train_columns,
                                   stn)
 
-######
-## stream predict on training - should be the same as predicting on X_trn above
-######
-sorted_path = prepare_submission_file_for_streaming(trn_path, OUTPUT_DIR, 
-                                                    nrows = NROW_TRAIN)
-predictions, ids = stream_predict(sorted_path, net, 
-                                  CONTINUOUS_PREDICTORS, 
-                                  CATEGORICAL_PREDICTORS,
-                                  train_columns,
-                                  stn)
-    
