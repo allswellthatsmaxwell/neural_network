@@ -22,6 +22,7 @@ from prediction_utils import (trn_val_tst,
 import neural_network.neural_network as nn
 import neural_network.activations as avs
 import neural_network.loss_functions as losses
+from sklearn.model_selection import train_test_split
 
 def sort_and_get_prior_clicks(dat):
     """ for each ip address in dat, for each click that ip address has,
@@ -224,6 +225,12 @@ def chunk_predict(X_t, net, chunk_size = 10000, verbose = True):
     assert(len(yhat_submit) == m)
     return yhat_submit
 
+def filter_single_occurence_columns(dat):
+    level_counts = [dat[colname].value_counts() for colname in dat.columns]
+    two_level_columns = [l for l in level_counts if len(l) == 2]
+    single_occurences = [l for l in two_level_columns if l[1] == 1]
+    
+
 CATEGORICAL_PREDICTORS = ['os', 'device', 'app', 'channel']
 CONTINUOUS_PREDICTORS= ['os_n_distinct', 'device_n_distinct', 
                         'app_n_distinct', 'channel_n_distinct',
@@ -234,7 +241,7 @@ OUTPUT_DIR = "../../out/china"
 trn_path = os.path.join(DATA_DIR, "train.csv")
 tst_path = os.path.join(DATA_DIR, "test.csv")
 
-NROW_TRAIN = 100000
+NROW_TRAIN = 10000
 dataset = pd.read_csv(trn_path, nrows = NROW_TRAIN)
 dataset['click_id'] = range(dataset.shape[0])
 ##sorted_submission_path = prepare_submission_file_for_streaming(tst_path)
@@ -247,12 +254,12 @@ train_columns = dat.columns
 X = dat.as_matrix()
 y = np.array(dataset['is_attributed'])    
 
-stn = Standardizer(X)
-X = stn.standardize(X)
+(X_trn, X_tst, 
+ y_trn, y_tst) = train_test_split(X, y, test_size = 1/10, random_state = 1)
+stn = Standardizer(X_trn)
+X_trn = stn.standardize(X_trn)
+X_tst = stn.standardize(X_tst)
 
-(X_trn, y_trn, 
- X_tst, y_tst, 
- X_val, y_val) = trn_val_tst(X, y, 9/10, 1/10, 0)
 
 net_shape = [X.shape[1], 30, 20, 20, 20, 20, 20, 1]
 activations = standard_binary_classification_layers(len(net_shape))
@@ -267,10 +274,10 @@ costs = net.train(X = X_trn.T, y = y_trn,
 yhat_trn = net.predict(X_trn.T)
 auc_trn = roc_auc_score(y_trn, yhat_trn)
 print("training set auc =", auc_trn)
-yhat_val = net.predict(X_val.T)
-yyhat_val = bind_and_sort(y_val, yhat_val)
-auc_val = roc_auc_score(y_val, yhat_val)
-print("auc =", auc_val)
+yhat_tst = net.predict(X_tst.T)
+yyhat_tst = bind_and_sort(y_tst, yhat_tst)
+auc_tst = roc_auc_score(y_tst, yhat_tst)
+print("auc =", auc_tst)
 
 
 sorted_path = prepare_submission_file_for_streaming(tst_path, OUTPUT_DIR, 

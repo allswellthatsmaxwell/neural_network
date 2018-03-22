@@ -11,6 +11,7 @@ Activation functions and their backward-propogation companions.
 import numpy as np
 
 def sigmoid(Z):
+    Z = np.clip(Z, -500, 500) ## prevent overflow
     return 1 / (1 + np.exp(-Z))
 
 def relu(Z):
