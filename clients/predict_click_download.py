@@ -71,20 +71,58 @@ def prepare_predictors(dataset, continuous, categorical):
         dat = pd.get_dummies(dat, columns = categorical)
     return dat.as_matrix(), click_id
 
-#def prepare_submission_file_for_streaming(orig_submit_path):
-#    sorted_path = os.path.join(DATA_DIR, "submission_sorted.csv")
-#    if not os.path.exists(sorted_path):
-#        submission_dat = pd.read_csv(orig_submit_path)
-#        submission_dat.sort_values(by = 'ip', inplace = True)
-#        submission_dat.to_csv(sorted_path, index = False)
-#    return sorted_path
+def prepare_submission_file_for_streaming(orig_submit_path):
+    sorted_path = os.path.join(DATA_DIR, "submission_sorted.csv")
+    if not os.path.exists(sorted_path):
+        submission_dat = pd.read_csv(orig_submit_path)
+        submission_dat.sort_values(by = 'ip', inplace = True)
+        submission_dat.to_csv(sorted_path, index = False)
+    return sorted_path
 
-#def stream_predict(sorted_submit_path, net, ips_at_a_time = 100):
-#    assert(net.is_trained)
-#    ranges = []
-#    with open(sorted_submit_path) as f:
-#        reader = csv.DictReader(f, delimiter = ',')
-#        for row in reader:     
+def stream_predict(sorted_submit_path, net, continuous, categorical,
+                   standardizer,
+                   lines_at_a_time = 10000):
+    """
+    Reads, prepares as training data was prepared, and predicts upon 
+    lines_at_a_time lines at a time (as a dataframe) from the csv file 
+    at sorted_submit_path.
+    lines_at_a_time is approximate, because ip addresses are read in groups.
+    precondition: the file at sorted_submit_path is sorted by ip
+    net: a trained net
+    continuous, categorical: the same predictors used to train the net
+    standardizer: the same standardizer used to standardize the input matrix
+    when the net was trained
+    returns: a vector of predictions, one per line in sorted_submit_path,
+             and corresponding click_ids
+    """
+    assert(net.is_trained)
+    predictions = []
+    click_ids = []
+    rows_this_batch = []
+    i = 0
+    with open(sorted_submit_path) as f:
+        reader = csv.DictReader(f, delimiter = ',')
+        header = reader.fieldnames
+        while True:
+            try:
+                row = next(reader)
+                rows_this_batch.append(row)
+                if i % lines_at_a_time == 0:
+                    ## eat up the rest of the lines for the current ip address 
+                    ## then make rows_this_batch into dataframe, prepare it
+                    ## and standardize it, and predict it.
+                    ##
+                    ## MISSING: EAT UP REST STEP
+                    df = pd.DataFrame(rows_this_batch, columns = header)
+                    X, click_id_batch = prepare_predictors(df, continuous, 
+                                                           categorical)
+                    X = standardizer.standardize(X)
+                    predictions_batch = net.predict(X.T)
+                    predictions.extend(predictions_batch)
+                    click_ids.extend(click_id_batch)
+            except:
+        i += 1
+    return predictions, click_ids
         
 def get_X_submission(submit_path,
                      data_dir,
