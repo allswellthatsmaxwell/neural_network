@@ -67,10 +67,11 @@ def prepare_predictors(dataset, continuous, categorical):
     predictors = continuous + categorical
     dat = engineer_features(dataset)
     click_id = dat['click_id']
+    y = click_id = dat['is_attributed']
     dat = dat[predictors]
     if categorical != []:
         dat = pd.get_dummies(dat, columns = categorical)
-    return dat, click_id
+    return dat, click_id, y
 
 def prepare_submission_file_for_streaming(orig_submit_path, output_dir, 
                                           nrows = None):
@@ -160,18 +161,25 @@ def do_batch_prediction(rows, header, net, standardizer,
     assert(net.is_trained)
     df = pd.DataFrame(rows, columns = header)
     dat, click_id_batch = prepare_predictors(df, continuous, categorical)
-    new_levels = [colname for colname in dat.columns 
-                  if colname not in train_columns]
-    dat.drop(labels = new_levels, axis = 1, inplace = True)
-    ## Add all-zero columns for dummy levels that were in training, but were 
-    ## not in current batch
-    for colname in train_columns:
-        if colname not in dat.columns:
-            dat[colname] = 0
+    conform_columns(dat, train_columns)
     X = dat.as_matrix()
     X = standardizer.standardize(X)
     predictions_batch = net.predict(X.T)
     return predictions_batch, click_id_batch
+
+def conform_columns(dat, train_columns):
+    """
+    remove and add columns from dat inplace so that it has the same columns 
+    as train_columns
+    """
+    new_levels = [colname for colname in dat.columns 
+                  if colname not in train_columns]
+    dat.drop(labels = new_levels, axis = 1, inplace = True)
+    ## Add all-zero columns for dummy levels that are in training, but aren't
+    ## in dat
+    for colname in train_columns:
+        if colname not in dat.columns:
+            dat[colname] = 0
 
 def get_X_submission(submit_path,
                      data_dir,
@@ -234,11 +242,25 @@ def drop_single_occurence_columns(dat):
             cols_to_drop.append(colname)
     return dat.drop(cols_to_drop, axis = 1)
 
-def ip_aware_train_test_split(dat, test_size):
-    pass
+def ip_aware_train_test_split(dat, test_prop):
+    """
+    split dat into train-test by ips (not by record). 
+    test_prop: probability an ip is assigned to the test set
+    returns: train, test dataframes with the same columns as the input,
+             and where no ip address is in both frames.
+    """
+    assert(0 <= test_prop <= 1)
+    ips = dat.ip.unique()
+    test_probas = np.random.rand(len(ips))
+    is_test = [True if p < test_prop else False for p in test_probas]
+    test_ips = ips[is_test]
+    train_ips = ips[[not b for b in is_test]]
+    train = dat[dat['ip'].isin(train_ips)]
+    test = dat[dat['ip'].isin(test_ips)]
+    return train.copy(), test.copy()
 
             
-CATEGORICAL_PREDICTORS = ['os', 'device', 'app', 'channel']
+CATEGORICAL_PREDICTORS = []#['os', 'device', 'app', 'channel']
 CONTINUOUS_PREDICTORS= ['os_n_distinct', 'device_n_distinct', 
                         'app_n_distinct', 'channel_n_distinct',
                         'time_of_day', 'clicks_so_far']
@@ -248,33 +270,34 @@ OUTPUT_DIR = "../../out/china"
 trn_path = os.path.join(DATA_DIR, "train.csv")
 tst_path = os.path.join(DATA_DIR, "test.csv")
 
-NROW_TRAIN = 100000
+NROW_TRAIN = 1000000
 dataset = pd.read_csv(trn_path, nrows = NROW_TRAIN)
 dataset['click_id'] = range(dataset.shape[0])
 ##sorted_submission_path = prepare_submission_file_for_streaming(tst_path)
 
 attributed_rate = dataset['is_attributed'].sum() / dataset.shape[0]
 
-dat, _ = prepare_predictors(dataset, 
-                            CONTINUOUS_PREDICTORS, CATEGORICAL_PREDICTORS)
-dat = drop_single_occurence_columns(dat)
-train_columns = dat.columns
-X = dat.as_matrix()
-y = np.array(dataset['is_attributed'])
+train, test = ip_aware_train_test_split(dataset, 2/10)
+train, _, y_trn = prepare_predictors(train, CONTINUOUS_PREDICTORS, 
+                                     CATEGORICAL_PREDICTORS)
+test, _, y_tst = prepare_predictors(test, CONTINUOUS_PREDICTORS, 
+                                    CATEGORICAL_PREDICTORS)
+train = drop_single_occurence_columns(train)
+conform_columns(test, train.columns)
+X_trn, X_tst = train.as_matrix(), test.as_matrix()
+y_trn, y_tst = np.array(y_trn), np.array(y_tst)
 
-(X_trn, X_tst, 
- y_trn, y_tst) = train_test_split(X, y, test_size = 1/10, random_state = 1)
 stn = Standardizer(X_trn)
 X_trn = stn.standardize(X_trn)
 X_tst = stn.standardize(X_tst)
 
 
-net_shape = [X.shape[1], 30, 20, 20, 20, 20, 20, 1]
+net_shape = [X_trn.shape[1], 30, 20, 20, 20, 20, 20, 1]
 activations = standard_binary_classification_layers(len(net_shape))
 
 net = nn.Net(net_shape, activations, use_adam = True)
 costs = net.train(X = X_trn.T, y = y_trn, 
-                  iterations = 400, 
+                  iterations = 800, 
                   learning_rate = 0.001,
                   minibatch_size = 128,
                   lambd = 0.6,
@@ -293,7 +316,7 @@ sorted_path = prepare_submission_file_for_streaming(tst_path, OUTPUT_DIR,
 predictions, ids = stream_predict(sorted_path, net, 
                                   CONTINUOUS_PREDICTORS, 
                                   CATEGORICAL_PREDICTORS,
-                                  train_columns,
+                                  train.columns,
                                   stn,
                                   lines_at_a_time = 100000)
 
