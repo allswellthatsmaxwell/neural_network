@@ -225,12 +225,19 @@ def chunk_predict(X_t, net, chunk_size = 10000, verbose = True):
     assert(len(yhat_submit) == m)
     return yhat_submit
 
-def filter_single_occurence_columns(dat):
-    level_counts = [dat[colname].value_counts() for colname in dat.columns]
-    two_level_columns = [l for l in level_counts if len(l) == 2]
-    single_occurences = [l for l in two_level_columns if l[1] == 1]
-    
+def drop_single_occurence_columns(dat):
+    """ drop columns with two levels in which one level appears only once """
+    cols_to_drop = []
+    for colname in dat.columns:
+        values_counts = dat[colname].value_counts()
+        if len(values_counts) == 2 and values_counts[1] == 1:
+            cols_to_drop.append(colname)
+    return dat.drop(cols_to_drop, axis = 1)
 
+def ip_aware_train_test_split(dat, test_size):
+    pass
+
+            
 CATEGORICAL_PREDICTORS = ['os', 'device', 'app', 'channel']
 CONTINUOUS_PREDICTORS= ['os_n_distinct', 'device_n_distinct', 
                         'app_n_distinct', 'channel_n_distinct',
@@ -241,7 +248,7 @@ OUTPUT_DIR = "../../out/china"
 trn_path = os.path.join(DATA_DIR, "train.csv")
 tst_path = os.path.join(DATA_DIR, "test.csv")
 
-NROW_TRAIN = 10000
+NROW_TRAIN = 100000
 dataset = pd.read_csv(trn_path, nrows = NROW_TRAIN)
 dataset['click_id'] = range(dataset.shape[0])
 ##sorted_submission_path = prepare_submission_file_for_streaming(tst_path)
@@ -250,9 +257,10 @@ attributed_rate = dataset['is_attributed'].sum() / dataset.shape[0]
 
 dat, _ = prepare_predictors(dataset, 
                             CONTINUOUS_PREDICTORS, CATEGORICAL_PREDICTORS)
+dat = drop_single_occurence_columns(dat)
 train_columns = dat.columns
 X = dat.as_matrix()
-y = np.array(dataset['is_attributed'])    
+y = np.array(dataset['is_attributed'])
 
 (X_trn, X_tst, 
  y_trn, y_tst) = train_test_split(X, y, test_size = 1/10, random_state = 1)
