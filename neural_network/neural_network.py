@@ -226,15 +226,16 @@ class Net:
     def __assert_input_ok(X):
         assert(not np.isnan(X).any())
             
-    def train(self, X, y,
-              iterations = 100,
-              learning_rate = 0.01,
-              lambd = 0.,
-              minibatch_size = 64,
-              alpha_decayer = lambda epoch: 1,
-              converge_at = 0.0,
-              beta1 = 0.9, beta2 = 0.99,
-              debug = False):
+    def fit(self, X, y,
+            iterations = 100,
+            learning_rate = 0.01,
+            lambd = 0.,
+            minibatch_size = 64,
+            alpha_decayer = lambda epoch: 1,
+            converge_at = 0.0,
+            beta1 = 0.9, beta2 = 0.99,
+            evaluator = None,
+            debug = False):
         """ 
         Train the network.
         -- Arguments:
@@ -282,18 +283,23 @@ class Net:
                 if cost < converge_at:
                     break
             if debug:
-                print(f"[epoch: {i}, cost: {cost}]")           
+                if evaluator is not None:
+                    eval_value = evaluator.evaluate(self)
+                    eval_name = evaluator.eval_metric_name
+                    print(f"[epoch: {i}, cost: {cost}, {eval_name}: {eval_value}]")
+                else:
+                    print(f"[epoch: {i}, cost: {cost}]")
         self.is_trained = True
         return costs
 
-    def predict(self, X):
+    def predict_proba(self, X):
         """
         Use the trained network to output predictions for the examples in X.
         Precondition: is_trained must be True.
         X: an n-by-m matrix
         returns: an m-length array of predictions
         """
-        assert(self.is_trained)
+        ## assert(self.is_trained)
         self.__model_forward(InputLayer(X))
         yhat = self.hidden_layers[-1].A
         return np.squeeze(yhat)

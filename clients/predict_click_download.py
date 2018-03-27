@@ -19,6 +19,7 @@ from prediction_utils import (trn_val_tst,
                               standard_binary_classification_layers,
                               Standardizer,
                               bind_and_sort)
+from neural_network.evaluator import Evaluator
 import neural_network.neural_network as nn
 import neural_network.activations as avs
 import neural_network.loss_functions as losses
@@ -165,7 +166,7 @@ def do_batch_prediction(rows, header, net, standardizer,
     conform_columns(dat, train_columns)
     X = dat.as_matrix()
     X = standardizer.standardize(X)
-    predictions_batch = net.predict(X.T)
+    predictions_batch = net.predict_proba(X.T)
     return predictions_batch, click_id_batch
 
 def conform_columns(dat, train_columns):
@@ -222,13 +223,13 @@ def chunk_predict(X_t, net, chunk_size = 10000, verbose = True):
     m = X_t.shape[1]
     for i in range(0, m // chunk_size):
         small_mat = X_t[:, (chunk_size * i):(chunk_size * (i + 1))]
-        yhat_chunk = net.predict(small_mat)
+        yhat_chunk = net.predict_proba(small_mat)
         yhat_submit.extend(yhat_chunk)
         if verbose: print(int(i * chunk_size / m * 100), 
                           "% of records processed")
     left_over = m % chunk_size
     small_mat = X_t[:, (m - left_over):]
-    yhat_chunk = net.predict(small_mat)
+    yhat_chunk = net.predict_proba(small_mat)
     yhat_submit.extend(yhat_chunk)
     if verbose: print("100 % of records processed")
     assert(len(yhat_submit) == m)
@@ -260,7 +261,8 @@ def ip_aware_train_test_split(dat, test_prop):
     test = dat[dat['ip'].isin(test_ips)]
     return train.copy(), test.copy()
 
-            
+#%%
+    
 CATEGORICAL_PREDICTORS = []#['os', 'device', 'app', 'channel']
 CONTINUOUS_PREDICTORS= ['os_n_distinct', 'device_n_distinct', 
                         'app_n_distinct', 'channel_n_distinct',
@@ -271,11 +273,13 @@ OUTPUT_DIR = "../../out/china"
 trn_path = os.path.join(DATA_DIR, "train.csv")
 tst_path = os.path.join(DATA_DIR, "test.csv")
 
-NROW_TRAIN = 1000000
+NROW_TRAIN = 100000
+#%%
 dataset = pd.read_csv(trn_path, nrows = NROW_TRAIN)
 dataset['click_id'] = range(dataset.shape[0])
 ##sorted_submission_path = prepare_submission_file_for_streaming(tst_path)
 
+#%%
 attributed_rate = dataset['is_attributed'].sum() / dataset.shape[0]
 
 train, test = ip_aware_train_test_split(dataset, 2/10)
@@ -291,22 +295,24 @@ y_trn, y_tst = np.array(y_trn), np.array(y_tst)
 stn = Standardizer(X_trn)
 X_trn = stn.standardize(X_trn)
 X_tst = stn.standardize(X_tst)
+evaluator = Evaluator(X_tst.T, y_tst)
 
 #%%
 net_shape = [X_trn.shape[1], 30, 20, 20, 20, 20, 20, 1]
 activations = standard_binary_classification_layers(len(net_shape))
 
 net = nn.Net(net_shape, activations, use_adam = True)
-costs = net.train(X = X_trn.T, y = y_trn, 
-                  iterations = 5, 
-                  learning_rate = 0.01,
-                  minibatch_size = 128 * 24,
-                  lambd = 0.2,
-                  debug = True)
-yhat_trn = net.predict(X_trn.T)
+costs = net.fit(X = X_trn.T, y = y_trn, 
+                iterations = 50, 
+                learning_rate = 0.01,
+                minibatch_size = 128 * 24,
+                lambd = 0.2,
+                evaluator = evaluator,
+                debug = True)
+yhat_trn = net.predict_proba(X_trn.T)
 auc_trn = roc_auc_score(y_trn, yhat_trn)
 print("training set auc =", auc_trn)
-yhat_tst = net.predict(X_tst.T)
+yhat_tst = net.predict_proba(X_tst.T)
 yyhat_tst = bind_and_sort(y_tst, yhat_tst)
 auc_tst = roc_auc_score(y_tst, yhat_tst)
 print("auc =", auc_tst)
