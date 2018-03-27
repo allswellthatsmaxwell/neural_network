@@ -23,6 +23,7 @@ import neural_network.neural_network as nn
 import neural_network.activations as avs
 import neural_network.loss_functions as losses
 from sklearn.model_selection import train_test_split
+#%%
 
 def sort_and_get_prior_clicks(dat):
     """ for each ip address in dat, for each click that ip address has,
@@ -291,16 +292,16 @@ stn = Standardizer(X_trn)
 X_trn = stn.standardize(X_trn)
 X_tst = stn.standardize(X_tst)
 
-
+#%%
 net_shape = [X_trn.shape[1], 30, 20, 20, 20, 20, 20, 1]
 activations = standard_binary_classification_layers(len(net_shape))
 
 net = nn.Net(net_shape, activations, use_adam = True)
 costs = net.train(X = X_trn.T, y = y_trn, 
-                  iterations = 800, 
-                  learning_rate = 0.001,
-                  minibatch_size = 128,
-                  lambd = 0.6,
+                  iterations = 5, 
+                  learning_rate = 0.01,
+                  minibatch_size = 128 * 24,
+                  lambd = 0.2,
                   debug = True)
 yhat_trn = net.predict(X_trn.T)
 auc_trn = roc_auc_score(y_trn, yhat_trn)
@@ -310,6 +311,7 @@ yyhat_tst = bind_and_sort(y_tst, yhat_tst)
 auc_tst = roc_auc_score(y_tst, yhat_tst)
 print("auc =", auc_tst)
 
+#%%
 
 sorted_path = prepare_submission_file_for_streaming(tst_path, OUTPUT_DIR, 
                                                     nrows = None)

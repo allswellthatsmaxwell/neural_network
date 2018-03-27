@@ -232,7 +232,7 @@ class Net:
               lambd = 0.,
               minibatch_size = 64,
               alpha_decayer = lambda epoch: 1,
-              converge_at = 0.02,
+              converge_at = 0.0,
               beta1 = 0.9, beta2 = 0.99,
               debug = False):
         """ 
@@ -273,16 +273,16 @@ class Net:
                 cost = (self.J(yhat, mini_y) +
                         self.l2_cost(lambd, mini_input_layer.m_examples))
                 costs.append(cost)
-                if debug:
-                    print(cost)
                 self.__model_backward(mini_y, l2_scaling_factor)
                 if self.use_adam:
-                    self.__adam(adj_learning_rate, t = i, beta1 = beta1, beta2 = beta2)
+                    self.__adam(adj_learning_rate, t = i,
+                                beta1 = beta1, beta2 = beta2)
                 else:
                     self.__update_parameters(adj_learning_rate)
                 if cost < converge_at:
-                    if debug: print("cost converged at iteration", i)
                     break
+            if debug:
+                print(f"[epoch: {i}, cost: {cost}]")           
         self.is_trained = True
         return costs
 
