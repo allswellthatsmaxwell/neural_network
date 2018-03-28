@@ -264,6 +264,32 @@ def ip_aware_split(dat, second_set_prop):
 
 #%%
     
+class Param:
+    def __init__(self, alpha, lambd, aucs):
+        self.alpha = alpha
+        self.lambd = lambd
+        self.aucs = aucs
+    
+def hyperopt(net_shape, activations, X_trn, y_trn, evaluator, n_combos):
+    learning_rates = 10**(-4 * np.random.rand(2))
+    lambdas = 10**(-2 * np.random.rand(2))
+    results = []
+    for alpha, lambd in zip(learning_rates, lambdas):
+        print("alpha:", alpha, "| lambda:", lambd)
+        
+        net = nn.Net(net_shape, activations, use_adam = True)
+        _, aucs = net.fit(X_trn.T, y_trn, 
+                          iterations = 50,
+                          learning_rate = alpha,
+                          minibatch_size = 128 * 24 * 2,
+                          lambd = lambd,
+                          evaluator = evaluator)
+        results.append(Param(alpha, lambd, aucs))
+    return results
+
+
+#%%
+    
 CATEGORICAL_PREDICTORS = []#['os', 'device', 'app', 'channel']
 CONTINUOUS_PREDICTORS= ['os_n_distinct', 'device_n_distinct', 
                         'app_n_distinct', 'channel_n_distinct',
@@ -304,18 +330,18 @@ X_dev = stn.standardize(X_dev)
 X_tst = stn.standardize(X_tst)
 evaluator = Evaluator(X_dev.T, y_dev)
 
-#%%
 net_shape = [X_trn.shape[1], 30, 20, 20, 20, 20, 20, 1]
 activations = standard_binary_classification_layers(len(net_shape))
+#%%
 
 net = nn.Net(net_shape, activations, use_adam = True)
-costs = net.fit(X = X_trn.T, y = y_trn, 
-                iterations = 25, 
-                learning_rate = 0.005,#0.05,
-                minibatch_size = 128 * 24 * 2,
-                lambd = 0.02,
-                evaluator = evaluator,
-                debug = True)
+costs, aucs = net.fit(X = X_trn.T, y = y_trn, 
+                      iterations = 25, 
+                      learning_rate = 0.005,#0.05,
+                      minibatch_size = 128 * 24 * 2,
+                      lambd = 0.02,
+                      evaluator = evaluator,
+                      debug = True)
 yhat_trn = net.predict_proba(X_trn.T)
 yhat_dev = net.predict_proba(X_dev.T)
 yhat_tst = net.predict_proba(X_tst.T)
@@ -327,6 +353,9 @@ print("trn auc =", auc_trn)
 print("dev auc =", auc_dev)
 #print("tst auc =", auc_tst)
 
+#%%
+params_aucs = hyperopt(net_shape, activations, X_trn, y_trn, evaluator, 
+                       n_combos = 20) 
 #%%
 
 sorted_path = prepare_submission_file_for_streaming(tst_path, OUTPUT_DIR, 

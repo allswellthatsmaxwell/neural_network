@@ -258,6 +258,7 @@ class Net:
         returns: an array of what the cost function's value was at each iteration
         """
         costs = []
+        eval_values = []
         self.__assert_input_ok(X)
         input_layer = InputLayer(X)
         AL = self.hidden_layers[-1].A
@@ -282,16 +283,18 @@ class Net:
                     self.__update_parameters(adj_learning_rate)
                 if cost < converge_at:
                     break
-            if debug:
-                if evaluator is not None:
-                    eval_value = evaluator.evaluate(self)
-                    train_value = evaluator.eval_fn(self, X, y)
-                    eval_name = evaluator.eval_metric_name
-                    print(f"[epoch: {i}, train {eval_name}: {train_value}, eval {eval_name}: {eval_value}]")
-                else:
-                    print(f"[epoch: {i}, cost: {cost}]")
+            if evaluator is not None:
+                eval_value = evaluator.evaluate(self)
+                eval_values.append(eval_value)                
+            if debug and evaluator is not None:
+                train_value = evaluator.eval_fn(self, X, y)
+                eval_name = evaluator.eval_metric_name
+                print(f"[epoch: {i}, train {eval_name}:",
+                      f"{train_value}, eval {eval_name}: {eval_value}]")
+            elif debug:
+                print(f"[epoch: {i}, cost: {cost}]")
         self.is_trained = True
-        return costs
+        return costs, eval_values
 
     def predict_proba(self, X):
         """
