@@ -244,22 +244,23 @@ def drop_single_occurence_columns(dat):
             cols_to_drop.append(colname)
     return dat.drop(cols_to_drop, axis = 1)
 
-def ip_aware_train_test_split(dat, test_prop):
+def ip_aware_split(dat, second_set_prop):
     """
-    split dat into train-test by ips (not by record). 
-    test_prop: probability an ip is assigned to the test set
-    returns: train, test dataframes with the same columns as the input,
+    split dat into two sets by ips (not by record). 
+    second_set_prop: probability an ip is assigned to the second set
+    returns: two dataframes with the same columns as the input,
              and where no ip address is in both frames.
     """
-    assert(0 <= test_prop <= 1)
+    assert(0 <= second_set_prop <= 1)
     ips = dat.ip.unique()
-    test_probas = np.random.rand(len(ips))
-    is_test = [True if p < test_prop else False for p in test_probas]
-    test_ips = ips[is_test]
-    train_ips = ips[[not b for b in is_test]]
-    train = dat[dat['ip'].isin(train_ips)]
-    test = dat[dat['ip'].isin(test_ips)]
-    return train.copy(), test.copy()
+    second_set_probas = np.random.rand(len(ips))
+    is_second = [True if p < second_set_prop else False 
+                 for p in second_set_probas]
+    second_ips = ips[is_second]
+    first_ips = ips[[not b for b in is_second]]
+    first = dat[dat['ip'].isin(first_ips)]
+    second = dat[dat['ip'].isin(second_ips)]
+    return first.copy(), second.copy()
 
 #%%
     
@@ -273,7 +274,7 @@ OUTPUT_DIR = "../../out/china"
 trn_path = os.path.join(DATA_DIR, "train.csv")
 tst_path = os.path.join(DATA_DIR, "test.csv")
 
-NROW_TRAIN = 100000
+NROW_TRAIN = 200000
 #%%
 dataset = pd.read_csv(trn_path, nrows = NROW_TRAIN)
 dataset['click_id'] = range(dataset.shape[0])
@@ -282,20 +283,26 @@ dataset['click_id'] = range(dataset.shape[0])
 #%%
 attributed_rate = dataset['is_attributed'].sum() / dataset.shape[0]
 
-train, test = ip_aware_train_test_split(dataset, 2/10)
+train, devtest = ip_aware_split(dataset, 2/10)
+dev, test = ip_aware_split(devtest, 5/10)
+del(devtest)
 train, _, y_trn = prepare_predictors(train, CONTINUOUS_PREDICTORS, 
                                      CATEGORICAL_PREDICTORS)
+dev, _, y_dev = prepare_predictors(dev, CONTINUOUS_PREDICTORS, 
+                                   CATEGORICAL_PREDICTORS)
 test, _, y_tst = prepare_predictors(test, CONTINUOUS_PREDICTORS, 
                                     CATEGORICAL_PREDICTORS)
 train = drop_single_occurence_columns(train)
+conform_columns(dev, train.columns)
 conform_columns(test, train.columns)
-X_trn, X_tst = train.as_matrix(), test.as_matrix()
-y_trn, y_tst = np.array(y_trn), np.array(y_tst)
+X_trn, X_dev, X_tst = train.as_matrix(), dev.as_matrix(), test.as_matrix()
+y_trn, y_dev, y_tst = np.array(y_trn), np.array(y_dev), np.array(y_tst)
 
 stn = Standardizer(X_trn)
 X_trn = stn.standardize(X_trn)
+X_dev = stn.standardize(X_dev)
 X_tst = stn.standardize(X_tst)
-evaluator = Evaluator(X_tst.T, y_tst)
+evaluator = Evaluator(X_dev.T, y_dev)
 
 #%%
 net_shape = [X_trn.shape[1], 30, 20, 20, 20, 20, 20, 1]
@@ -303,19 +310,22 @@ activations = standard_binary_classification_layers(len(net_shape))
 
 net = nn.Net(net_shape, activations, use_adam = True)
 costs = net.fit(X = X_trn.T, y = y_trn, 
-                iterations = 50, 
-                learning_rate = 0.01,
-                minibatch_size = 128 * 24,
-                lambd = 0.2,
+                iterations = 25, 
+                learning_rate = 0.005,#0.05,
+                minibatch_size = 128 * 24 * 2,
+                lambd = 0.02,
                 evaluator = evaluator,
                 debug = True)
 yhat_trn = net.predict_proba(X_trn.T)
-auc_trn = roc_auc_score(y_trn, yhat_trn)
-print("training set auc =", auc_trn)
+yhat_dev = net.predict_proba(X_dev.T)
 yhat_tst = net.predict_proba(X_tst.T)
-yyhat_tst = bind_and_sort(y_tst, yhat_tst)
+auc_trn = roc_auc_score(y_trn, yhat_trn)
+auc_dev = roc_auc_score(y_dev, yhat_dev)
 auc_tst = roc_auc_score(y_tst, yhat_tst)
-print("auc =", auc_tst)
+yyhat_tst = bind_and_sort(y_tst, yhat_tst)
+print("trn auc =", auc_trn)
+print("dev auc =", auc_dev)
+#print("tst auc =", auc_tst)
 
 #%%
 

@@ -11,7 +11,7 @@ Activation functions and their backward-propogation companions.
 import numpy as np
 
 def sigmoid(Z):
-    Z = np.clip(Z, -500, 500) ## prevent overflow
+    Z = np.clip(Z, -400, 400) ## prevent overflow
     return 1 / (1 + np.exp(-Z))
 
 def relu(Z):
@@ -42,7 +42,7 @@ def sigmoid_prime(dA, Z):
     Arguments: dA -- post-activation gradient, of any shape
     Returns: dZ -- Gradient of the cost with respect to Z
     """
-    s = 1 / (1 + np.exp(-Z))
+    s = sigmoid(Z)
     dZ = dA * s * (1 - s)    
     assert (dZ.shape == Z.shape)    
     return dZ

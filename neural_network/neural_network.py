@@ -285,8 +285,9 @@ class Net:
             if debug:
                 if evaluator is not None:
                     eval_value = evaluator.evaluate(self)
+                    train_value = evaluator.eval_fn(self, X, y)
                     eval_name = evaluator.eval_metric_name
-                    print(f"[epoch: {i}, cost: {cost}, {eval_name}: {eval_value}]")
+                    print(f"[epoch: {i}, train {eval_name}: {train_value}, eval {eval_name}: {eval_value}]")
                 else:
                     print(f"[epoch: {i}, cost: {cost}]")
         self.is_trained = True
