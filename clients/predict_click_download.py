@@ -271,6 +271,14 @@ class Param:
         self.aucs = aucs
     
 def hyperopt(net_shape, activations, X_trn, y_trn, evaluator, n_combos):
+    """
+    searches over reasonable values of different parameters to a Net and
+    returns a list of the aucs achieved with each parameter set.
+    
+    returns: a list of Param
+    Arguments: 
+        n_combos: the number of parameter combinations to try
+    """
     learning_rates = 10**(-4 * np.random.rand(n_combos))
     lambdas = 10**(-2 * np.random.rand(n_combos))
     results = []
@@ -291,6 +299,21 @@ def hyperopt(net_shape, activations, X_trn, y_trn, evaluator, n_combos):
             results.append(Param(alpha, lambd, aucs))            
     return results
 
+def get_maximizing_params(param_list):
+    """
+    param_list: a list of class Param
+    returns: the index of and value of the highest auc observed over all
+    the parameters
+    """
+    max_auc = 0
+    maximizing_index = -1
+    for (i, param) in enumerate(param_list):
+        highest_auc_for_param = np.max(param.aucs)
+        if (highest_auc_for_param is not None 
+            and highest_auc_for_param > max_auc):
+            max_auc = highest_auc_for_param
+            maximizing_index = i
+    return maximizing_index, max_auc
 
 #%%
     
@@ -336,14 +359,21 @@ evaluator = Evaluator(X_dev.T, y_dev)
 
 net_shape = [X_trn.shape[1], 30, 20, 20, 20, 20, 20, 1]
 activations = standard_binary_classification_layers(len(net_shape))
+
+#%%
+params_aucs = hyperopt(net_shape, activations, X_trn, y_trn, evaluator, 
+                       n_combos = 100)
+maxer_ind, max_auc = get_maximizing_params(params_aucs)
+param = params_aucs[maxer_ind]
+alpha, lambd, epochs = param.alpha, param.lambd, np.argmax(param.aucs)
 #%%
 
 net = nn.Net(net_shape, activations, use_adam = True)
 costs, aucs = net.fit(X = X_trn.T, y = y_trn, 
-                      iterations = 25, 
-                      learning_rate = 0.005,#0.05,
+                      iterations = epochs, ##25, 
+                      learning_rate = alpha, ##0.005,
                       minibatch_size = 128 * 24 * 2,
-                      lambd = 0.02,
+                      lambd = lambd, ##0.02,
                       evaluator = evaluator,
                       debug = True)
 yhat_trn = net.predict_proba(X_trn.T)
@@ -357,9 +387,6 @@ print("trn auc =", auc_trn)
 print("dev auc =", auc_dev)
 #print("tst auc =", auc_tst)
 
-#%%
-params_aucs = hyperopt(net_shape, activations, X_trn, y_trn, evaluator, 
-                       n_combos = 100) 
 #%%
 
 sorted_path = prepare_submission_file_for_streaming(tst_path, OUTPUT_DIR, 
