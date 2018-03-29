@@ -271,20 +271,24 @@ class Param:
         self.aucs = aucs
     
 def hyperopt(net_shape, activations, X_trn, y_trn, evaluator, n_combos):
-    learning_rates = 10**(-4 * np.random.rand(2))
-    lambdas = 10**(-2 * np.random.rand(2))
+    learning_rates = 10**(-4 * np.random.rand(n_combos))
+    lambdas = 10**(-2 * np.random.rand(n_combos))
     results = []
     for alpha, lambd in zip(learning_rates, lambdas):
         print("alpha:", alpha, "| lambda:", lambd)
         
         net = nn.Net(net_shape, activations, use_adam = True)
-        _, aucs = net.fit(X_trn.T, y_trn, 
-                          iterations = 50,
-                          learning_rate = alpha,
-                          minibatch_size = 128 * 24 * 2,
-                          lambd = lambd,
-                          evaluator = evaluator)
-        results.append(Param(alpha, lambd, aucs))
+        try:
+            _, aucs = net.fit(X_trn.T, y_trn, 
+                              iterations = 50,
+                              learning_rate = alpha,
+                              minibatch_size = 128 * 24 * 2,
+                              lambd = lambd,
+                              evaluator = evaluator)
+            results.append(Param(alpha, lambd, aucs))
+        except:
+            aucs = None
+            results.append(Param(alpha, lambd, aucs))            
     return results
 
 
@@ -355,7 +359,7 @@ print("dev auc =", auc_dev)
 
 #%%
 params_aucs = hyperopt(net_shape, activations, X_trn, y_trn, evaluator, 
-                       n_combos = 20) 
+                       n_combos = 100) 
 #%%
 
 sorted_path = prepare_submission_file_for_streaming(tst_path, OUTPUT_DIR, 
