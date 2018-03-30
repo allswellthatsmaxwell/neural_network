@@ -55,6 +55,7 @@ def engineer_features(dataset):
     dat['click_timestamp'] = dat['click_time'].apply(string_to_timestamp)
     dat['click_timefloat'] = dat['click_timestamp'].apply(timestamp_to_float)
     dat['time_since_last_click'] = dat.groupby('ip').click_timefloat.diff()
+    dat['time_since_last_click'].fillna(-1, inplace = True)
     dat['time_of_day'] = dat['click_timestamp'].apply(seconds_since_midnight)
     unique_counts = dat.groupby('ip').agg({'os'    : 'nunique', 
                                            'device': 'nunique', 
@@ -321,7 +322,8 @@ def get_maximizing_params(param_list):
 CATEGORICAL_PREDICTORS = []#['os', 'device', 'app', 'channel']
 CONTINUOUS_PREDICTORS= ['os_n_distinct', 'device_n_distinct', 
                         'app_n_distinct', 'channel_n_distinct',
-                        'time_of_day', 'clicks_so_far']
+                        'time_of_day', 'clicks_so_far', 
+                        'time_since_last_click']
 PREDICTORS = CATEGORICAL_PREDICTORS + CONTINUOUS_PREDICTORS
 DATA_DIR = "../../data/china"
 OUTPUT_DIR = "../../out/china"
@@ -371,10 +373,10 @@ alpha, lambd, epochs = param.alpha, param.lambd, np.argmax(param.aucs)
 
 net = nn.Net(net_shape, activations, use_adam = True)
 costs, aucs = net.fit(X = X_trn.T, y = y_trn, 
-                      iterations = epochs, ##25, 
-                      learning_rate = alpha, ##0.005,
+                      iterations = 100, ## epochs
+                      learning_rate = 0.005, ## alpha
                       minibatch_size = 128 * 24 * 2,
-                      lambd = lambd, ##0.02,
+                      lambd = 0.02, ## lambd
                       evaluator = evaluator,
                       debug = True)
 yhat_trn = net.predict_proba(X_trn.T)
@@ -395,8 +397,8 @@ print("dev auc =", auc_dev)
 
 clf = xgboost.XGBClassifier()
 clf.fit(X_trn, y_trn)
-yhat_trn = clf.predict_proba(X_trn)[:,-1]
-yhat_dev = clf.predict_proba(X_dev)[:,-1]
+yhat_trn = clf.predict_proba(X_trn)[:,-1] 
+yhat_dev = clf.predict_proba(X_dev)[:,-1] 
 auc_trn = roc_auc_score(y_trn, yhat_trn)
 auc_dev = roc_auc_score(y_dev, yhat_dev)
 #%%
