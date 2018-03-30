@@ -261,7 +261,6 @@ class Net:
         eval_values = []
         self.__assert_input_ok(X)
         input_layer = InputLayer(X)
-        AL = self.hidden_layers[-1].A
         for i in range(1, iterations + 1):
             adj_learning_rate = alpha_decayer(i) * learning_rate
             minibatches = self.get_minibatches(X, y, minibatch_size)

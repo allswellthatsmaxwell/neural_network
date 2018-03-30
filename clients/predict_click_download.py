@@ -24,6 +24,7 @@ import neural_network.neural_network as nn
 import neural_network.activations as avs
 import neural_network.loss_functions as losses
 from sklearn.model_selection import train_test_split
+import xgboost
 #%%
 
 def sort_and_get_prior_clicks(dat):
@@ -383,10 +384,21 @@ auc_trn = roc_auc_score(y_trn, yhat_trn)
 auc_dev = roc_auc_score(y_dev, yhat_dev)
 auc_tst = roc_auc_score(y_tst, yhat_tst)
 yyhat_tst = bind_and_sort(y_tst, yhat_tst)
+auc_trn = roc_auc_score(y_trn, yhat_trn)
+auc_dev = roc_auc_score(y_dev, yhat_dev)
 print("trn auc =", auc_trn)
 print("dev auc =", auc_dev)
+
 #print("tst auc =", auc_tst)
 
+#%%
+
+clf = xgboost.XGBClassifier()
+clf.fit(X_trn, y_trn)
+yhat_trn = clf.predict_proba(X_trn)[:,-1]
+yhat_dev = clf.predict_proba(X_dev)[:,-1]
+auc_trn = roc_auc_score(y_trn, yhat_trn)
+auc_dev = roc_auc_score(y_dev, yhat_dev)
 #%%
 
 sorted_path = prepare_submission_file_for_streaming(tst_path, OUTPUT_DIR, 
