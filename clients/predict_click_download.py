@@ -25,6 +25,7 @@ import neural_network.activations as avs
 import neural_network.loss_functions as losses
 from sklearn.model_selection import train_test_split
 import xgboost
+import matplotlib.pyplot as plt
 #%%
 
 def sort_and_get_prior_clicks(dat):
@@ -284,9 +285,8 @@ def hyperopt(net_shape, activations, X_trn, y_trn, evaluator, n_combos):
     learning_rates = 10**(-4 * np.random.rand(n_combos))
     lambdas = 10**(-2 * np.random.rand(n_combos))
     results = []
-    for alpha, lambd in zip(learning_rates, lambdas):
-        print("alpha:", alpha, "| lambda:", lambd)
-        
+    i = 1
+    for alpha, lambd in zip(learning_rates, lambdas):                
         net = nn.Net(net_shape, activations, use_adam = True)
         try:
             _, aucs = net.fit(X_trn.T, y_trn, 
@@ -295,10 +295,16 @@ def hyperopt(net_shape, activations, X_trn, y_trn, evaluator, n_combos):
                               minibatch_size = 128 * 24 * 2,
                               lambd = lambd,
                               evaluator = evaluator)
+            max_auc = max(aucs)
+            print("iter:", i, "\n",
+                  "alpha:", alpha, "\n",
+                  "lambda:", lambd, "\n",
+                  "max auc:", max_auc)
             results.append(Param(alpha, lambd, aucs))
         except:
             aucs = None
             results.append(Param(alpha, lambd, aucs))            
+        i += 1
     return results
 
 def get_maximizing_params(param_list):
@@ -359,8 +365,9 @@ X_trn = stn.standardize(X_trn)
 X_dev = stn.standardize(X_dev)
 X_tst = stn.standardize(X_tst)
 evaluator = Evaluator(X_dev.T, y_dev)
-
+#%%
 net_shape = [X_trn.shape[1], 30, 20, 20, 20, 20, 20, 1]
+#net_shape = [X_trn.shape[1], 6,6,6,6,4,2, 1]
 activations = standard_binary_classification_layers(len(net_shape))
 
 #%%
@@ -373,10 +380,13 @@ alpha, lambd, epochs = param.alpha, param.lambd, np.argmax(param.aucs)
 
 net = nn.Net(net_shape, activations, use_adam = True)
 costs, aucs = net.fit(X = X_trn.T, y = y_trn, 
-                      iterations = 100, ## epochs
-                      learning_rate = 0.005, ## alpha
+                      iterations = 1000, 
+                      #iterations = epochs,
+                      learning_rate = 0.005, 
+                      #learning_rate = alpha,
                       minibatch_size = 128 * 24 * 2,
-                      lambd = 0.02, ## lambd
+                      lambd = 0.99, 
+                      #lambd = lambd,
                       evaluator = evaluator,
                       debug = True)
 yhat_trn = net.predict_proba(X_trn.T)

@@ -47,9 +47,11 @@ class Layer:
         self.A = None
         self.Z = None
     
-    def shape(self): return self.W.shape
+    def shape(self):
+        return self.W.shape
 
-    def n_features(self): return self.shape[0]
+    def n_features(self):
+        return self.shape[0]
     
     def propagate_forward_from(self, layer):
         """
