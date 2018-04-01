@@ -21,7 +21,8 @@ class InputLayer:
 
 class Layer:
 
-    def __init__(self, name, n, n_prev, activation, use_adam = False,
+    def __init__(self, name, n, n_prev, activation,
+                 use_adam = False,
                  initialization = neural_network.initializations.he):
         """ n: integer; the dimension of this layer
             n_prev: integer; the dimension of the previous layer            
@@ -153,13 +154,6 @@ class Net:
         self.hidden_layers[0].propagate_forward_from(input_layer)
         for i in range(1, self.n_layers()):
             self.hidden_layers[i].propagate_forward_from(self.hidden_layers[i - 1])
-
-    def shape(self):
-        """ 
-        returns a list containing the shape of the weight matrix 
-        in each layer 
-        """
-        return [l.W.shape for l in self.hidden_layers]
             
     def __model_backward(self, y, l2_scaling_factor):
         """ Does one full backward pass through the network. """
@@ -180,7 +174,7 @@ class Net:
         for layer in self.hidden_layers:
             layer.update_parameters(learning_rate, t, beta1, beta2)
     
-    def l2_cost(self, lambd, m):
+    def __l2_cost(self, lambd, m):
         """ lambd: scaling parameter
             m: number of training examples
             returns: L2 cost
@@ -194,7 +188,7 @@ class Net:
         return (lambd * unscaled_l2_cost) / (2 * m)
     
     @staticmethod
-    def get_minibatches(X, y, minibatch_size):
+    def __get_minibatches(X, y, minibatch_size):
         """
         X: n by m matrix of training examples
         y: m length array of outcomes
@@ -218,7 +212,7 @@ class Net:
         return minibatches
 
     @staticmethod
-    def check_for_edge_predictions(yhat):
+    def __check_for_edge_predictions(yhat):
         if np.max(yhat) == 1:
             warnings.warn("some predictions are 1")
         if np.min(yhat) == 0:
@@ -227,7 +221,31 @@ class Net:
     @staticmethod
     def __assert_input_ok(X):
         assert(not np.isnan(X).any())
-            
+
+    def __gradient_check(self, eps = 1e-7):
+        """ not finished """
+        W_vec  = self.__stack_things(lambda lyr: self.__matrix_to_vector(lyr.W))
+        dW_vec = self.__stack_things(lambda lyr: self.__matrix_to_vector(lyr.dW))
+        b_vec  = self.__stack_things(lambda lyr: lyr.b.reshape(lyr.b.shape[0]))
+        db_vec = self.__stack_things(lambda lyr: lyr.db.reshape(lyr.db.shape[0]))
+
+    def __approximate_derivative(self, vec, i, eps):
+        """ not finished """
+        vec[i] += eps
+
+    @staticmethod
+    def __matrix_to_vector(mat):
+        """ reshape m-by-n matrix into an m*n-length array"""
+        vec_len = mat.shape[0] * mat.shape[1]
+        return mat.reshape(vec_len,)
+    
+    def __stack_things(self, action_fn):
+        """ apply action_fn to each layer in hidden_layers 
+            and concatenate the results into a single vector
+        """
+        return np.concatenate([action_fn(l) for l in self.hidden_layers])
+
+        
     def fit(self, X, y,
             iterations = 100,
             learning_rate = 0.01,
@@ -265,16 +283,16 @@ class Net:
         input_layer = InputLayer(X)
         for i in range(1, iterations + 1):
             adj_learning_rate = alpha_decayer(i) * learning_rate
-            minibatches = self.get_minibatches(X, y, minibatch_size)
+            minibatches = self.__get_minibatches(X, y, minibatch_size)
             for minibatch in minibatches:                
                 (mini_X, mini_y) = minibatch
                 mini_input_layer = InputLayer(mini_X)
                 l2_scaling_factor = lambd / mini_input_layer.m_examples
                 self.__model_forward(mini_input_layer)
                 yhat = self.hidden_layers[-1].A
-                self.check_for_edge_predictions(yhat)
+                self.__check_for_edge_predictions(yhat)
                 cost = (self.J(yhat, mini_y) +
-                        self.l2_cost(lambd, mini_input_layer.m_examples))
+                        self.__l2_cost(lambd, mini_input_layer.m_examples))
                 costs.append(cost)
                 self.__model_backward(mini_y, l2_scaling_factor)
                 if self.use_adam:
@@ -311,26 +329,10 @@ class Net:
     
     def n_layers(self): 
         return len(self.hidden_layers)
-    
-    def __gradient_check(self, eps = 1e-7):
-        """ not finished """
-        W_vec  = self.__stack_things(lambda lyr: self.__matrix_to_vector(lyr.W))
-        dW_vec = self.__stack_things(lambda lyr: self.__matrix_to_vector(lyr.dW))
-        b_vec  = self.__stack_things(lambda lyr: lyr.b.reshape(lyr.b.shape[0]))
-        db_vec = self.__stack_things(lambda lyr: lyr.db.reshape(lyr.db.shape[0]))
 
-    def __approximate_derivative(self, vec, i, eps):
-        """ not finished """
-        vec[i] += eps
-
-    @staticmethod
-    def __matrix_to_vector(mat):
-        """ reshape m-by-n matrix into an m*n-length array"""
-        vec_len = mat.shape[0] * mat.shape[1]
-        return mat.reshape(vec_len,)
-    
-    def __stack_things(self, action_fn):
-        """ apply action_fn to each layer in hidden_layers 
-            and concatenate the results into a single vector
+    def shape(self):
+        """ 
+        returns a list containing the shape of the weight matrix 
+        in each layer 
         """
-        return np.concatenate([action_fn(l) for l in self.hidden_layers])
+        return [l.W.shape for l in self.hidden_layers]

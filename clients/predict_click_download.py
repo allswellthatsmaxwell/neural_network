@@ -366,7 +366,7 @@ X_dev = stn.standardize(X_dev)
 X_tst = stn.standardize(X_tst)
 evaluator = Evaluator(X_dev.T, y_dev)
 #%%
-net_shape = [X_trn.shape[1], 30, 20, 20, 20, 20, 20, 1]
+net_shape = [X_trn.shape[1], 30, 20, 20, 20, 20, 20, 20, 20, 1]
 #net_shape = [X_trn.shape[1], 6,6,6,6,4,2, 1]
 activations = standard_binary_classification_layers(len(net_shape))
 
@@ -385,7 +385,7 @@ costs, aucs = net.fit(X = X_trn.T, y = y_trn,
                       learning_rate = 0.005, 
                       #learning_rate = alpha,
                       minibatch_size = 128 * 24 * 2,
-                      lambd = 0.99, 
+                      lambd = 0.8, 
                       #lambd = lambd,
                       evaluator = evaluator,
                       debug = True)
