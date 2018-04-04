@@ -324,6 +324,38 @@ def get_maximizing_params(param_list):
     return maximizing_index, max_auc
 
 #%%
+        
+def get_click_timediffs(dat):
+    dat['click_timestamp'] = dat['click_time'].apply(string_to_timestamp)
+    dat['click_timefloat'] = dat['click_timestamp'].apply(timestamp_to_float)
+    dat['time_since_last_click'] = dat.groupby('ip').click_timefloat.diff()
+    temporal_stats = (dat.groupby('ip')['time_since_last_click'].
+                      agg([np.mean, np.std, np.min, np.max]))
+    
+    return temporal_stats
+    
+
+def change_to_per_ip_dataset(per_click_dat):
+    """
+    input: a dataframe of records representing clicks, where the outcome 
+    variable 'is_attributed' is 1 if the click led to a download and 0 if not
+    returns: a dataframe of records representing ip addresses, where the
+    outcome variable 'ever_clicked' is 1 if the ip address ever downloaded
+    an app and 0 if not
+    """
+    general_data = (per_click_dat.
+                    groupby('ip').
+                    agg({'is_attributed': 'max',
+                         'click_id': 'count',
+                         'os'    : 'nunique',
+                         'device': 'nunique',
+                         'app'   : 'nunique',
+                         'channel': 'nunique'}).
+                    rename(columns = {'click_id':'n_clicks'}))
+    temporal_data = get_click_timediffs(per_click_dat)
+    general_data.join(temporal_data)
+    
+#%%
     
 CATEGORICAL_PREDICTORS = []#['os', 'device', 'app', 'channel']
 CONTINUOUS_PREDICTORS= ['os_n_distinct', 'device_n_distinct', 

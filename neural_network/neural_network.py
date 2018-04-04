@@ -23,7 +23,8 @@ class Layer:
 
     def __init__(self, name, n, n_prev, activation,
                  use_adam = False,
-                 initialization = neural_network.initializations.he):
+                 initialization = neural_network.initializations.he,
+                 keep_prob = 1):
         """ n: integer; the dimension of this layer
             n_prev: integer; the dimension of the previous layer            
             activation: function; the activation function for this node
@@ -34,6 +35,8 @@ class Layer:
         self.activation = activation
         self.W = initialization(n, n_prev)
         self.b = np.zeros((n, 1))
+        self.keep_prob = keep_prob
+        self.is_trained = False
         if use_adam:
             self.update_parameters = self.__update_adam
         else:
@@ -62,7 +65,14 @@ class Layer:
         self.A_prev = layer.A.copy()
         self.Z = np.dot(self.W, layer.A) + self.b
         self.A = self.activation(self.Z)
-        
+        if self.keep_prob < 1 and not self.is_trained:
+            self.D = (np.random.randn(self.A.shape[0], self.A.shape[1]) <
+                      self.keep_prob)
+            self.A *= self.D
+            print(self.A)
+            print(self.name)
+            self.A /= self.keep_prob
+            
     def propagate_backward(self, l2_scaling_factor):
         """
         Performs back propagation through this layer. 
@@ -71,6 +81,10 @@ class Layer:
         Zero for no regularization.
         """
         m = self.A_prev.shape[1]
+        if self.keep_prob < 1:
+            print("divvydiv")
+            self.dA *= self.D
+            self.dA /= self.keep_prob
         dZ = actv.derivative(self.activation)(self.dA, self.Z)
         self.dW = (((1 / m) * np.dot(dZ, self.A_prev.T)) +
                    ## add gradient of L2-regularized term
@@ -119,7 +133,8 @@ class Net:
     """
     def __init__(self, layer_dims, activations,
                  loss = neural_network.loss_functions.LogLoss(),
-                 use_adam = False):
+                 use_adam = False,
+                 keep_prob = 1):
         """
         layer_dims: an array of layer dimensions. 
                     including the input layer.
@@ -134,7 +149,7 @@ class Net:
         self.use_adam = use_adam
         self.is_trained = False
         self.J = loss.cost
-        self.J_prime = loss.cost_gradient        
+        self.J_prime = loss.cost_gradient
         
         self.hidden_layers = []
         for i in range(1, len(layer_dims)):
@@ -142,18 +157,19 @@ class Net:
                 Layer(name = i,
                       n = layer_dims[i], n_prev = layer_dims[i - 1],
                       activation = activations[i],
-                      use_adam = use_adam))
+                      use_adam = use_adam,
+                      keep_prob = keep_prob))
             
     def __output_activation(self): return self.hidden_layers[-1].activation
             
     def __model_forward(self, input_layer):
         """ 
         Does one full forward pass through the network.        
-        """
-        
+        """    
         self.hidden_layers[0].propagate_forward_from(input_layer)
         for i in range(1, self.n_layers()):
-            self.hidden_layers[i].propagate_forward_from(self.hidden_layers[i - 1])
+            (self.hidden_layers[i].
+             propagate_forward_from(self.hidden_layers[i - 1]))
             
     def __model_backward(self, y, l2_scaling_factor):
         """ Does one full backward pass through the network. """
@@ -313,6 +329,8 @@ class Net:
             elif debug:
                 print(f"[epoch: {i}, cost: {cost}]")
         self.is_trained = True
+        for layer in self.hidden_layers:
+            layer.is_trained = True
         return costs, eval_values
 
     def predict_proba(self, X):
