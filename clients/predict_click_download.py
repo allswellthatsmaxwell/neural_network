@@ -353,7 +353,10 @@ def change_to_per_ip_dataset(per_click_dat):
                          'channel': 'nunique'}).
                     rename(columns = {'click_id':'n_clicks'}))
     temporal_data = get_click_timediffs(per_click_dat)
-    general_data.join(temporal_data)
+    data = general_data.join(temporal_data)
+    data.fillna(-1, inplace = True)
+    return (data.drop(['is_attributed'], axis = 1).as_matrix(),
+            np.array(data['is_attributed']))
     
 #%%
     
@@ -368,13 +371,29 @@ OUTPUT_DIR = "../../out/china"
 trn_path = os.path.join(DATA_DIR, "train.csv")
 tst_path = os.path.join(DATA_DIR, "test.csv")
 
-NROW_TRAIN = 200000
+NROW_TRAIN = 800000 * 2
 #%%
 dataset = pd.read_csv(trn_path, nrows = NROW_TRAIN)
 dataset['click_id'] = range(dataset.shape[0])
 ##sorted_submission_path = prepare_submission_file_for_streaming(tst_path)
 
 #%%
+X_ip, y_ip = change_to_per_ip_dataset(dataset)
+#%%
+(X_trn, y_trn, 
+ X_dev, y_dev, 
+ X_tst, y_tst) = trn_val_tst(X_ip, y_ip, 9/10, 0.5/10, 0.5/10)
+
+stn = Standardizer(X_trn)
+X_trn = stn.standardize(X_trn)
+X_dev = stn.standardize(X_dev)
+X_tst = stn.standardize(X_tst)
+evaluator = Evaluator(X_dev.T, y_dev)
+#%%
+net_shape = [X_trn.shape[1], 30, 20, 20, 20, 20, 20, 20, 20, 1]
+activations = standard_binary_classification_layers(len(net_shape))
+#%%
+
 attributed_rate = dataset['is_attributed'].sum() / dataset.shape[0]
 
 train, devtest = ip_aware_split(dataset, 2/10)
@@ -397,10 +416,6 @@ X_trn = stn.standardize(X_trn)
 X_dev = stn.standardize(X_dev)
 X_tst = stn.standardize(X_tst)
 evaluator = Evaluator(X_dev.T, y_dev)
-#%%
-net_shape = [X_trn.shape[1], 30, 20, 20, 20, 20, 20, 20, 20, 1]
-#net_shape = [X_trn.shape[1], 6,6,6,6,4,2, 1]
-activations = standard_binary_classification_layers(len(net_shape))
 
 #%%
 params_aucs = hyperopt(net_shape, activations, X_trn, y_trn, evaluator, 
@@ -409,6 +424,8 @@ maxer_ind, max_auc = get_maximizing_params(params_aucs)
 param = params_aucs[maxer_ind]
 alpha, lambd, epochs = param.alpha, param.lambd, np.argmax(param.aucs)
 #%%
+net_shape = [X_trn.shape[1], 30, 20, 20, 20, 20, 20, 20, 20, 1]
+activations = standard_binary_classification_layers(len(net_shape))
 
 net = nn.Net(net_shape, activations, use_adam = True)
 costs, aucs = net.fit(X = X_trn.T, y = y_trn, 
@@ -417,7 +434,7 @@ costs, aucs = net.fit(X = X_trn.T, y = y_trn,
                       learning_rate = 0.005, 
                       #learning_rate = alpha,
                       minibatch_size = 128 * 24 * 2,
-                      lambd = 0.8, 
+                      lambd = 0.9, 
                       #lambd = lambd,
                       evaluator = evaluator,
                       debug = True)
